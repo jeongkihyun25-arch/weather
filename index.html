@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI 테스트용 CCTV 대시보드</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: sans-serif; background: #f0f0f0; }
+        #header { padding: 15px; background: #222; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+        .btn-group button { padding: 8px 16px; margin-left: 5px; background: #444; color: #fff; border: 1px solid #666; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        #btn-back { display: none; background: #d35400; border-color: #e67e22; }
+        #content { display: flex; flex: 1; overflow: hidden; }
+        #map-container { flex: 2; position: relative; }
+        #map { width: 100%; height: 100%; z-index: 1; }
+        #video-container { flex: 1; background: #111; display: flex; flex-direction: column; padding: 10px; border-left: 2px solid #333; }
+        #video-title { color: #fff; margin-bottom: 10px; font-size: 14px; font-weight: bold; }
+        .info-label { background: white; border: 1px solid #ccc; padding: 2px 4px; font-size: 12px; border-radius: 3px; pointer-events: none; }
+        .placeholder { color: #888; display: flex; align-items: center; justify-content: center; height: 100%; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <span id="current-location-text">대한민국 (시/도를 선택하십시오)</span>
+        <div class="btn-group">
+            <button id="btn-back" onclick="goBack()">◀ 이전 화면</button>
+            <button onclick="resetMap()">전국 초기화</button>
+        </div>
+    </div>
+    <div id="content">
+        <div id="map-container">
+            <div id="map"></div>
+        </div>
+        <div id="video-container">
+            <div id="video-title" style="color:yellow;">[테스트 모드] API 미연동 상태</div>
+            <div class="placeholder">마커를 클릭하면 이곳에 영상이 출력됩니다.</div>
+        </div>
+    </div>
+
+    <script>
+        const SIDO_GEOJSON_URL = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_provinces_geo_simple.json';
+        const SIGUNGU_GEOJSON_URL = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_municipalities_geo_simple.json';
+
+        let map;
+        let sidoLayer = null;
+        let sigunguLayer = null;
+        let cctvLayer = L.featureGroup();
+        let currentLevel = 0;
+
+        initMap();
+
+        function initMap() {
+            map = L.map('map').setView([36.5, 127.5], 7);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+            map.addLayer(cctvLayer);
+            loadSido();
+        }
+
+        async function loadSido() {
+            const response = await fetch(SIDO_GEOJSON_URL);
+            const data = await response.json();
+            sidoLayer = L.geoJSON(data, {
+                style: { color: '#3388ff', weight: 2, fillOpacity: 0.1 },
+                onEachFeature: function(feature, layer) {
+                    layer.bindTooltip(feature.properties.name, { permanent: false, direction: "center", className: "info-label" });
+                    layer.on('click', function() { handleSidoClick(feature, layer); });
+                }
+            });
+            map.addLayer(sidoLayer);
+        }
+
+        async function handleSidoClick(feature, layer) {
+            const sidoCode = feature.properties.code;
+            const sidoName = feature.properties.name;
+            
+            currentLevel = 1;
+            document.getElementById('btn-back').style.display = 'inline-block';
+            document.getElementById('current-location-text').innerText = `${sidoName} (탐색 완료) - 테스트 마커 로드됨`;
+            
+            map.removeLayer(sidoLayer);
+            map.fitBounds(layer.getBounds());
+
+            // 시군구 레이어 렌더링
+            const response = await fetch(SIGUNGU_GEOJSON_URL);
+            const data = await response.json();
+            data.features = data.features.filter(f => f.properties.code.startsWith(sidoCode));
+
+            sigunguLayer = L.geoJSON(data, {
+                style: { color: '#8e44ad', weight: 1, fillOpacity: 0.05 },
+                onEachFeature: function(feature, subLayer) {
+                    subLayer.bindTooltip(feature.properties.name, { permanent: false, className: "info-label" });
+                }
+            }).addTo(map);
+
+            // 가짜 데이터 렌더링 (천안IC, 공주IC 인근)
+            renderDummyMarkers();
+        }
+
+        function renderDummyMarkers() {
+            cctvLayer.clearLayers();
+            const dummyData = [
+                { lat: 36.819, lng: 127.156, name: "[테스트] 천안IC 인근" },
+                { lat: 36.460, lng: 127.128, name: "[테스트] 공주IC 인근" }
+            ];
+
+            dummyData.forEach(cctv => {
+                const marker = L.circleMarker([cctv.lat, cctv.lng], {
+                    radius: 6, color: '#c0392b', fillColor: '#e74c3c', fillOpacity: 0.9, weight: 2
+                });
+                marker.bindTooltip(cctv.name);
+                marker.on('click', () => {
+                    document.getElementById('video-title').innerText = `${cctv.name} 클릭됨 (API 연결 필요)`;
+                });
+                cctvLayer.addLayer(marker);
+            });
+        }
+
+        function goBack() {
+            if (currentLevel === 1) {
+                currentLevel = 0;
+                document.getElementById('btn-back').style.display = 'none';
+                document.getElementById('current-location-text').innerText = '대한민국 (시/도를 선택하십시오)';
+                if (sigunguLayer) map.removeLayer(sigunguLayer);
+                cctvLayer.clearLayers();
+                map.addLayer(sidoLayer);
+                map.setView([36.5, 127.5], 7);
+            }
+        }
+
+        function resetMap() { goBack(); }
+    </script>
+</body>
+</html>
