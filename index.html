@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>지역 검색 및 근접 CCTV 대시보드</title>
+    <title>지역 검색 및 기상/CCTV 대시보드</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -15,12 +15,20 @@
         #btn-back { display: none; background: #d35400; border-color: #e67e22; }
         #content { display: flex; flex: 1; overflow: hidden; }
         #map-container { flex: 2; position: relative; }
-        #map { width: 100%; height: 100%; z-index: 1; background: #e0f3ff; /* 바다 배경색 */ }
-        #video-container { flex: 1; background: #111; display: flex; flex-direction: column; padding: 10px; border-left: 2px solid #333; }
-        #video-title { color: #fff; margin-bottom: 10px; font-size: 14px; font-weight: bold; }
+        #map { width: 100%; height: 100%; z-index: 1; background: #e0f3ff; }
+        
+        /* 우측 패널 디자인 개선 */
+        #video-container { flex: 1; background: #111; display: flex; flex-direction: column; padding: 15px; border-left: 2px solid #333; color: #fff; }
+        
+        /* 기상 정보 패널 추가 */
+        #weather-panel { background: #2c3e50; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #34495e; display: none; }
+        .weather-header { font-size: 13px; color: #bdc3c7; margin-bottom: 5px; border-bottom: 1px solid #34495e; padding-bottom: 5px; }
+        .weather-data { font-size: 18px; font-weight: bold; color: #f1c40f; margin-bottom: 5px; }
+        .weather-sub { font-size: 13px; color: #ecf0f1; }
+        
+        #video-title { font-size: 15px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px; }
         .placeholder { color: #888; display: flex; align-items: center; justify-content: center; flex-direction: column; height: 100%; font-size: 14px; text-align: center;}
         
-        /* 지역 라벨 디자인 (한글 가독성 강화) */
         .region-label { background: transparent; border: none; box-shadow: none; font-weight: 800; color: #2c3e50; text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff; font-size: 13px; text-align: center; }
     </style>
 </head>
@@ -37,7 +45,14 @@
             <div id="map"></div>
         </div>
         <div id="video-container">
-            <div id="video-title" style="color:yellow;">[테스트 모드] 대기 중</div>
+            <!-- 새로 추가된 기상 정보 패널 -->
+            <div id="weather-panel">
+                <div class="weather-header" id="weather-time">관측 시간: -</div>
+                <div class="weather-data" id="weather-condition">날씨 정보를 불러오는 중...</div>
+                <div class="weather-sub" id="weather-temp">온도: - ℃ | 강수 여부 확인 중</div>
+            </div>
+
+            <div id="video-title" style="color:yellow;">[테스트 모드] 영상 대기 중</div>
             <div id="video-status" class="placeholder">지역을 선택하거나 마커를 클릭하십시오.</div>
         </div>
     </div>
@@ -46,20 +61,16 @@
         const SIDO_GEOJSON_URL = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_provinces_geo_simple.json';
         const SIGUNGU_GEOJSON_URL = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_municipalities_geo_simple.json';
         
-        // 1. 남한 영토 바운딩 박스 설정 (북한 렌더링 차단)
         const southKoreaBounds = L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52));
 
-        // 2. 지도 초기화 (maxBounds 설정)
         let map = L.map('map', { 
             center: [35.8, 127.5], 
             zoom: 7, 
             minZoom: 7, 
             maxBounds: southKoreaBounds, 
-            maxBoundsViscosity: 1.0 // 스크롤 시 바운딩 박스 밖으로 튕겨나가지 않도록 고정
+            maxBoundsViscosity: 1.0 
         });
 
-        // 3. 국토교통부 Vworld 기본 지도 타일 적용 (한글 지명, 깔끔한 베이스)
-        // 참고: Vworld API 키 없이 동작하는 기본 타일 URL 구조
         L.tileLayer('https://xdworld.vworld.kr/2d/Base/service/{z}/{x}/{y}.png', {
             attribution: '&copy; 국토교통부 Vworld'
         }).addTo(map);
@@ -85,6 +96,8 @@
             if(sidoLayer) map.removeLayer(sidoLayer);
             if(sigunguLayer) map.removeLayer(sigunguLayer);
             
+            // CCTV 탐색과 동시에 기상 데이터 호출
+            fetchWeatherData(center.lat, center.lng);
             searchCCTVWithProximity(center.lat, center.lng);
         }).addTo(map);
 
@@ -108,6 +121,7 @@
             
             document.getElementById('btn-back').style.display = 'inline-block';
             document.getElementById('current-location-text').innerText = `${feature.properties.name} (시/군/구를 선택하세요)`;
+            document.getElementById('weather-panel').style.display = 'none'; // 상위 뎁스 이동 시 날씨 패널 숨김
             
             map.removeLayer(sidoLayer);
             map.fitBounds(layer.getBounds());
@@ -125,12 +139,60 @@
                         map.fitBounds(subLayer.getBounds());
                         document.getElementById('current-location-text').innerText = `탐색 구역: ${feature.properties.name}`;
                         
+                        // 지역 클릭 시 날씨 데이터 호출 추가
+                        fetchWeatherData(e.latlng.lat, e.latlng.lng);
                         searchCCTVWithProximity(e.latlng.lat, e.latlng.lng);
                     });
                 }
             }).addTo(map);
         }
 
+        // ==========================================
+        // ☀️ 날씨 데이터 호출 함수 (Open-Meteo API)
+        // ==========================================
+        async function fetchWeatherData(lat, lon) {
+            document.getElementById('weather-panel').style.display = 'block';
+            document.getElementById('weather-condition').innerText = "기상 데이터 분석 중...";
+
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=Asia%2FSeoul`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                const weather = data.current_weather;
+
+                // 현재 시간 포맷팅 (검색한 순간의 시간 고정)
+                const now = new Date();
+                const timeString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                
+                // WMO 날씨 코드 변환 로직
+                let conditionText = "상태 불명";
+                let isRaining = "강수 없음";
+                const code = weather.weathercode;
+
+                if (code === 0) conditionText = "☀️ 맑음";
+                else if ([1, 2, 3].includes(code)) conditionText = "☁️ 구름 많음/흐림";
+                else if ([45, 48].includes(code)) conditionText = "🌫️ 안개";
+                else if ([51, 53, 55, 56, 57].includes(code)) { conditionText = "🌧️ 이슬비"; isRaining = "현재 비 내림 (주의)"; }
+                else if ([61, 63, 65, 66, 67].includes(code)) { conditionText = "☔ 비"; isRaining = "현재 비 내림 (주의)"; }
+                else if ([71, 73, 75, 77].includes(code)) { conditionText = "❄️ 눈"; isRaining = "현재 눈 내림 (주의)"; }
+                else if ([80, 81, 82].includes(code)) { conditionText = "🚿 소나기"; isRaining = "현재 비 내림 (주의)"; }
+                else if ([95, 96, 99].includes(code)) { conditionText = "⛈️ 천둥번개/폭우"; isRaining = "폭우/낙뢰 (위험)"; }
+
+                // UI 업데이트
+                document.getElementById('weather-time').innerText = `검색 시각: ${timeString}`;
+                document.getElementById('weather-condition').innerText = conditionText;
+                document.getElementById('weather-temp').innerText = `온도: ${weather.temperature}℃ | 강수 상태: ${isRaining} (풍속: ${weather.windspeed}km/h)`;
+
+            } catch (error) {
+                document.getElementById('weather-condition').innerText = "기상청 서버 통신 오류";
+                console.error("Weather API Error:", error);
+            }
+        }
+
+        // ==========================================
+        // CCTV 마커 렌더링 시뮬레이션
+        // ==========================================
         function searchCCTVWithProximity(lat, lng) {
             document.getElementById('video-title').innerText = "CCTV 탐색 중...";
             document.getElementById('video-status').innerHTML = "선택 구역 내 데이터를 확인하고 있습니다...";
@@ -163,6 +225,8 @@
 
         function goBack() {
             cctvLayer.clearLayers();
+            document.getElementById('weather-panel').style.display = 'none'; // 뒤로가기 시 날씨 패널 숨김
+
             if (currentLevel === 2) {
                 currentLevel = 1;
                 document.getElementById('current-location-text').innerText = '시/도 탐색 모드 (시/군/구를 선택하세요)';
