@@ -15,11 +15,13 @@
         #btn-back { display: none; background: #d35400; border-color: #e67e22; }
         #content { display: flex; flex: 1; overflow: hidden; }
         #map-container { flex: 2; position: relative; }
-        #map { width: 100%; height: 100%; z-index: 1; }
+        #map { width: 100%; height: 100%; z-index: 1; background: #e0f3ff; /* 바다 배경색 */ }
         #video-container { flex: 1; background: #111; display: flex; flex-direction: column; padding: 10px; border-left: 2px solid #333; }
         #video-title { color: #fff; margin-bottom: 10px; font-size: 14px; font-weight: bold; }
         .placeholder { color: #888; display: flex; align-items: center; justify-content: center; flex-direction: column; height: 100%; font-size: 14px; text-align: center;}
-        .region-label { background: transparent; border: none; box-shadow: none; font-weight: 800; color: #111; text-shadow: -1px -1px 2px #fff, 1px -1px 2px #fff, -1px 1px 2px #fff, 1px 1px 2px #fff; font-size: 12px; text-align: center; }
+        
+        /* 지역 라벨 디자인 (한글 가독성 강화) */
+        .region-label { background: transparent; border: none; box-shadow: none; font-weight: 800; color: #2c3e50; text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff; font-size: 13px; text-align: center; }
     </style>
 </head>
 <body>
@@ -36,7 +38,7 @@
         </div>
         <div id="video-container">
             <div id="video-title" style="color:yellow;">[테스트 모드] 대기 중</div>
-            <div id="video-status" class="placeholder">마커를 클릭하면 영상이 출력됩니다.</div>
+            <div id="video-status" class="placeholder">지역을 선택하거나 마커를 클릭하십시오.</div>
         </div>
     </div>
 
@@ -44,25 +46,36 @@
         const SIDO_GEOJSON_URL = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_provinces_geo_simple.json';
         const SIGUNGU_GEOJSON_URL = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_municipalities_geo_simple.json';
         
-        const southKoreaBounds = L.latLngBounds(L.latLng(33.0, 125.0), L.latLng(38.5, 131.5));
+        // 1. 남한 영토 바운딩 박스 설정 (북한 렌더링 차단)
+        const southKoreaBounds = L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52));
 
-        let map = L.map('map', { center: [35.8, 127.5], zoom: 7, minZoom: 7, maxBounds: southKoreaBounds, maxBoundsViscosity: 1.0 });
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+        // 2. 지도 초기화 (maxBounds 설정)
+        let map = L.map('map', { 
+            center: [35.8, 127.5], 
+            zoom: 7, 
+            minZoom: 7, 
+            maxBounds: southKoreaBounds, 
+            maxBoundsViscosity: 1.0 // 스크롤 시 바운딩 박스 밖으로 튕겨나가지 않도록 고정
+        });
+
+        // 3. 국토교통부 Vworld 기본 지도 타일 적용 (한글 지명, 깔끔한 베이스)
+        // 참고: Vworld API 키 없이 동작하는 기본 타일 URL 구조
+        L.tileLayer('https://xdworld.vworld.kr/2d/Base/service/{z}/{x}/{y}.png', {
+            attribution: '&copy; 국토교통부 Vworld'
+        }).addTo(map);
 
         let sidoLayer = null;
         let sigunguLayer = null;
         let cctvLayer = L.featureGroup().addTo(map);
-        let currentLevel = 0; // 0: 전국, 1: 시/도, 2: 시/군/구
+        let currentLevel = 0;
 
-        // 검색 컨트롤 추가 및 이벤트 연동
         const geocoder = L.Control.geocoder({
             defaultMarkGeocode: false,
-            placeholder: "지역명 검색 (예: 천안시)"
+            placeholder: "지역명 검색 (예: 강남구)"
         }).on('markgeocode', function(e) {
             const bbox = e.geocode.bbox;
             const center = e.geocode.center;
             
-            // 검색 시 자동으로 뎁스 2(상세 지역) 모드로 진입 시뮬레이션
             currentLevel = 2;
             document.getElementById('btn-back').style.display = 'inline-block';
             document.getElementById('current-location-text').innerText = `검색 결과: ${e.geocode.name}`;
@@ -72,7 +85,6 @@
             if(sidoLayer) map.removeLayer(sidoLayer);
             if(sigunguLayer) map.removeLayer(sigunguLayer);
             
-            // 검색된 위치 기준으로 CCTV 탐색 실행
             searchCCTVWithProximity(center.lat, center.lng);
         }).addTo(map);
 
@@ -82,7 +94,7 @@
             const response = await fetch(SIDO_GEOJSON_URL);
             const data = await response.json();
             sidoLayer = L.geoJSON(data, {
-                style: { color: '#3388ff', weight: 2, fillOpacity: 0.1 },
+                style: { color: '#2980b9', weight: 2, fillOpacity: 0.05 },
                 onEachFeature: function(feature, layer) {
                     layer.bindTooltip(feature.properties.name, { permanent: true, direction: "center", className: "region-label" });
                     layer.on('click', function() { handleSidoClick(feature, layer); });
@@ -105,47 +117,38 @@
             data.features = data.features.filter(f => f.properties.code.startsWith(sidoCode));
 
             sigunguLayer = L.geoJSON(data, {
-                style: { color: '#8e44ad', weight: 1, fillOpacity: 0.05 },
+                style: { color: '#8e44ad', weight: 1, fillOpacity: 0.1 },
                 onEachFeature: function(feature, subLayer) {
                     subLayer.bindTooltip(feature.properties.name, { permanent: true, direction: "center", className: "region-label" });
-                    // 시/군/구 클릭 시 뎁스 2 진입
                     subLayer.on('click', function(e) {
                         currentLevel = 2;
                         map.fitBounds(subLayer.getBounds());
                         document.getElementById('current-location-text').innerText = `탐색 구역: ${feature.properties.name}`;
                         
-                        // 클릭한 위치의 중앙 좌표를 기준으로 탐색
                         searchCCTVWithProximity(e.latlng.lat, e.latlng.lng);
                     });
                 }
             }).addTo(map);
         }
 
-        // 반경 확장 로직 시뮬레이션
         function searchCCTVWithProximity(lat, lng) {
             document.getElementById('video-title').innerText = "CCTV 탐색 중...";
-            document.getElementById('video-status').innerHTML = "선택 구역 내 데이터를 확인하고 있습니다...<br>데이터가 없을 경우 반경을 넓힙니다.";
+            document.getElementById('video-status').innerHTML = "선택 구역 내 데이터를 확인하고 있습니다...";
             cctvLayer.clearLayers();
 
-            // API 통신 딜레이 시뮬레이션
             setTimeout(() => {
-                // 테스트를 위한 임의의 조건 (실제 API 연동 시 응답 datacount로 판단)
-                const isDataFound = Math.random() > 0.5; // 50% 확률로 해당 구역에 데이터 없음
+                const isDataFound = Math.random() > 0.5;
 
                 if (!isDataFound) {
                     document.getElementById('video-title').innerText = "해당 구역 CCTV 없음 (반경 확장)";
                     document.getElementById('video-status').innerHTML = "가장 가까운 인접 구역의 CCTV 마커를 렌더링했습니다.";
-                    
-                    // 인근 좌표로 가짜 마커 생성
                     renderDummyMarkers(lat + 0.05, lng + 0.05, "인접 지역 CCTV");
                 } else {
                     document.getElementById('video-title').innerText = "해당 구역 CCTV 확인됨";
-                    document.getElementById('video-status').innerHTML = "우측 지도에서 붉은 마커를 클릭하십시오.";
-                    
-                    // 정확한 좌표로 가짜 마커 생성
+                    document.getElementById('video-status').innerHTML = "지도에서 붉은 마커를 클릭하십시오.";
                     renderDummyMarkers(lat, lng, "해당 구역 CCTV");
                 }
-            }, 1000);
+            }, 800);
         }
 
         function renderDummyMarkers(lat, lng, prefix) {
@@ -155,20 +158,16 @@
                 document.getElementById('video-title').innerText = `${prefix} 송출 중`;
             });
             cctvLayer.addLayer(marker);
-            
-            // 인접 지역 마커가 보일 수 있도록 줌 아웃 (반경 확장 시각화)
             map.setView([lat, lng], 11);
         }
 
         function goBack() {
             cctvLayer.clearLayers();
             if (currentLevel === 2) {
-                // 시/군/구 뎁스에서 시/도 뎁스로 복귀
                 currentLevel = 1;
                 document.getElementById('current-location-text').innerText = '시/도 탐색 모드 (시/군/구를 선택하세요)';
                 map.setZoom(8);
             } else if (currentLevel === 1) {
-                // 시/도 뎁스에서 전국 뎁스로 복귀
                 currentLevel = 0;
                 document.getElementById('btn-back').style.display = 'none';
                 document.getElementById('current-location-text').innerText = '대한민국 (시/도를 선택하거나 검색하세요)';
@@ -179,7 +178,7 @@
         }
 
         function resetMap() {
-            currentLevel = 1; // 강제 복귀를 위한 세팅
+            currentLevel = 1;
             goBack();
         }
     </script>
