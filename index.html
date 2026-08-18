@@ -50,7 +50,7 @@
         .video-badge.active { background: #e74c3c; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-        /* 통합 마커 (클릭 간섭 원천 차단) */
+        /* 통합 마커 (지역명 + 기상 결합, 클릭 간섭 완벽 차단) */
         .leaflet-div-icon-custom { background: transparent; border: none; pointer-events: none !important; }
         .integrated-marker { background: rgba(30, 39, 46, 0.95); color: #fff; border: 1px solid #7f8fa6; border-radius: 6px; font-size: 12px; text-align: center; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: translate(-50%, -50%); pointer-events: none; }
         .im-name { font-weight: 900; background: rgba(0, 0, 0, 0.4); padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.2); pointer-events: none; }
@@ -88,6 +88,7 @@
 
         .empty-fav { color: #7f8fa6; font-size: 12px; width: 100%; text-align: center; }
 
+        /* 로딩 오버레이 및 알림 토스트 */
         #loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(17, 17, 17, 0.85); z-index: 1000; display: none; justify-content: center; align-items: center; flex-direction: column; color: #fbc531; font-size: 13px; font-weight: bold; }
         .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #fbc531; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin-bottom: 8px; }
         
@@ -107,7 +108,7 @@
 </head>
 <body>
     <div id="header">
-        <span id="current-location-text">시스템 동기화 완료. 상위 구역(시/도)을 선택하십시오.</span>
+        <span id="current-location-text">시스템 동기화 완료. 관측 대상 시/도를 선택하십시오.</span>
         <div class="btn-group">
             <button onclick="App.goBack()">이전</button>
             <button onclick="App.resetMap()">초기화</button>
@@ -147,7 +148,7 @@
                         <button id="btn-fav-add" onclick="App.addCurrentToFavorites()">채널 등록</button>
                     </div>
                 </div>
-                <div id="video-content"><div class="placeholder">지도 상의 CCTV 마커(붉은 점) 또는<br>하단 채널을 선택하십시오.</div></div>
+                <div id="video-content"><div class="placeholder">지도 상의 인프라 마커(붉은 점) 또는<br>하단 채널을 선택하십시오.</div></div>
             </div>
         </div>
     </div>
@@ -178,14 +179,14 @@
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
             TIMEOUT: 12000,
             MAJOR_CITIES: [
-                { name: '서울', lat: 37.5665, lng: 126.9780 }, { name: '부산', lat: 35.1796, lng: 129.0756 },
-                { name: '대구', lat: 35.8714, lng: 128.6014 }, { name: '인천', lat: 37.4563, lng: 126.7052 },
-                { name: '광주', lat: 35.1595, lng: 126.8526 }, { name: '대전', lat: 36.3504, lng: 127.3845 },
-                { name: '세종', lat: 36.4800, lng: 127.2890 }, { name: '제주', lat: 33.4890, lng: 126.4983 },
-                { name: '수원', lat: 37.2750, lng: 127.0094 }, { name: '춘천', lat: 37.8854, lng: 127.7298 },
-                { name: '청주', lat: 36.6356, lng: 127.4913 }, { name: '홍성', lat: 36.6013, lng: 126.6608 },
-                { name: '전주', lat: 35.8202, lng: 127.1086 }, { name: '무안', lat: 34.8161, lng: 126.4629 },
-                { name: '안동', lat: 36.5760, lng: 128.5056 }, { name: '창원', lat: 35.2383, lng: 128.6924 }
+                { name: '서울특별시', lat: 37.5665, lng: 126.9780 }, { name: '부산광역시', lat: 35.1796, lng: 129.0756 },
+                { name: '대구광역시', lat: 35.8714, lng: 128.6014 }, { name: '인천광역시', lat: 37.4563, lng: 126.7052 },
+                { name: '광주광역시', lat: 35.1595, lng: 126.8526 }, { name: '대전광역시', lat: 36.3504, lng: 127.3845 },
+                { name: '세종특별자치시', lat: 36.4800, lng: 127.2890 }, { name: '제주특별자치도', lat: 33.4890, lng: 126.4983 },
+                { name: '경기도', lat: 37.2750, lng: 127.0094 }, { name: '강원도', lat: 37.8854, lng: 127.7298 },
+                { name: '충청북도', lat: 36.6356, lng: 127.4913 }, { name: '충청남도', lat: 36.6013, lng: 126.6608 },
+                { name: '전라북도', lat: 35.8202, lng: 127.1086 }, { name: '전라남도', lat: 34.8161, lng: 126.4629 },
+                { name: '경상북도', lat: 36.5760, lng: 128.5056 }, { name: '경상남도', lat: 35.2383, lng: 128.6924 }
             ]
         };
 
@@ -225,6 +226,35 @@
             } catch (error) { clearTimeout(id); throw error; }
         }
 
+        // 통합 파서: ITS API가 JSON 대신 XML을 강제 반환할 경우를 완벽 방어
+        function parseITSData(rawContent) {
+            if (!rawContent) return [];
+            try {
+                // 1. JSON 파싱 시도
+                const json = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+                if (json?.response?.data) return json.response.data;
+                if (Array.isArray(json)) return json;
+            } catch (e) {}
+
+            // 2. XML 파싱 (Fallback)
+            try {
+                const parser = new DOMParser();
+                const xml = parser.parseFromString(rawContent, 'text/xml');
+                const dataNodes = xml.querySelectorAll('data');
+                const results = [];
+                dataNodes.forEach(node => {
+                    results.push({
+                        cctvname: node.querySelector('cctvname')?.textContent || '무명',
+                        coordy: parseFloat(node.querySelector('coordy')?.textContent || 0),
+                        coordx: parseFloat(node.querySelector('coordx')?.textContent || 0),
+                        cctvurl: node.querySelector('cctvurl')?.textContent || ''
+                    });
+                });
+                return results;
+            } catch (e) {}
+            return [];
+        }
+
         async function getAddressFromCoords(lat, lng) {
             try {
                 const res = await fetchWithTimeout(`${CONFIG.API.GEOCODE}?format=json&lat=${lat}&lon=${lng}&zoom=14&accept-language=ko`, { timeout: 3000 });
@@ -235,7 +265,7 @@
                     if (ad.city || ad.province) result.push(ad.city || ad.province);
                     if (ad.borough || ad.county) result.push(ad.borough || ad.county);
                     if (ad.town || ad.village) result.push(ad.town || ad.village);
-                    return result.join(' ') || '상세 주소 미상';
+                    return result.join(' ') || '상세 주소 확인 불가';
                 }
                 return '행정구역 정보 없음';
             } catch (e) { return '지오코딩 연동 지연'; }
@@ -263,7 +293,6 @@
                 this.fetchGlobalWeather();
                 this.fetchFavoritesWeather();
                 this.startAutoSync();
-                UI.showToast('시스템 구동 및 네트워크 연동 완료', '#2ecc71');
             },
 
             initMap: function() {
@@ -276,8 +305,10 @@
             },
 
             initGeocoder: function() {
-                L.Control.geocoder({ defaultMarkGeocode: false, placeholder: "검색" }).on('markgeocode', (e) => {
-                    this.executeDirectSearch(e.geocode.name, e.geocode.center.lat, e.geocode.center.lng);
+                L.Control.geocoder({ defaultMarkGeocode: false, placeholder: "검색" }).on('markgeocode', async (e) => {
+                    // 검색된 좌표를 바탕으로 가장 인접한 시/군/구명을 추출하여 헤더에 표출
+                    const addr = await getAddressFromCoords(e.geocode.center.lat, e.geocode.center.lng);
+                    this.executeDirectSearch(addr, e.geocode.center.lat, e.geocode.center.lng);
                 }).addTo(this.map);
             },
 
@@ -355,7 +386,7 @@
             },
 
             loadFavorites: function() {
-                const stored = localStorage.getItem('cctv_fav_v6');
+                const stored = localStorage.getItem('cctv_fav_v7');
                 if (stored) { this.favorites = JSON.parse(stored); } 
                 else {
                     this.favorites = [ { id: 'f1', name: '양양(양양IC)', lat: 38.064, lng: 128.599, address: '강원도 양양군 서면', url: '' } ];
@@ -364,7 +395,7 @@
                 this.renderFavoritesUI();
             },
 
-            saveFavorites: function() { localStorage.setItem('cctv_fav_v6', JSON.stringify(this.favorites)); },
+            saveFavorites: function() { localStorage.setItem('cctv_fav_v7', JSON.stringify(this.favorites)); },
 
             addCurrentToFavorites: async function() {
                 if (!State.isEditMode || !State.activeCCTV) return;
@@ -428,7 +459,7 @@
             },
 
             loadSpatialData: async function() {
-                UI.showLoading('공간 데이터 통신');
+                UI.showLoading('초기 공간망 구축');
                 try {
                     const [sidoRes, sigunguRes] = await Promise.all([ fetchWithTimeout(CONFIG.API.SIDO_GEOJSON), fetchWithTimeout(CONFIG.API.SIGUNGU_GEOJSON) ]);
                     State.sidoGeoJSON = await sidoRes.json(); State.sigunguGeoJSON = await sigunguRes.json();
@@ -465,7 +496,7 @@
                 this.currentLevel = 2;
                 this.currentFocusBounds = bounds;
                 this.map.fitBounds(bounds);
-                UI.updateHeader(`대상: ${name}`);
+                UI.updateHeader(`관측 대상: ${name}`);
                 
                 const center = bounds.getCenter();
                 this.fetchWeatherData(center.lat, center.lng);
@@ -479,7 +510,7 @@
                 
                 this.map.fitBounds(bounds);
                 this.currentFocusBounds = bounds;
-                UI.updateHeader(`관측: ${name}`);
+                UI.updateHeader(`관측 지점: ${name}`);
                 
                 if(this.geoLayer) this.map.removeLayer(this.geoLayer);
                 
@@ -519,29 +550,33 @@
 
             fetchActualCCTVData: async function(bounds, isBroadSearch = false, attempt = 1, autoPlay = false) {
                 if(!isBroadSearch) this.clearCCTVResources();
-                if(!isBroadSearch) UI.showLoading('인프라망 연동');
+                if(!isBroadSearch) UI.showLoading('인프라 좌표 렌더링');
 
                 const q = `?apiKey=${CONFIG.API.ITS_KEY}&type=all&cctvType=1&minX=${bounds.getWest().toFixed(5)}&maxX=${bounds.getEast().toFixed(5)}&minY=${bounds.getSouth().toFixed(5)}&maxY=${bounds.getNorth().toFixed(5)}&getType=json`;
                 
                 try {
                     const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(CONFIG.API.ITS_BASE + q)}`;
                     const res = await fetchWithTimeout(proxyUrl);
-                    let apiData;
-                    try { apiData = await res.json(); } 
-                    catch(e) {
+                    let rawData = await res.text();
+                    
+                    // XML/JSON 범용 파싱
+                    let cctvDataArray = parseITSData(rawData);
+
+                    if (!cctvDataArray || cctvDataArray.length === 0) {
+                        // 1차 실패 시 allorigins로 우회 시도
                         const fb = `https://api.allorigins.win/get?url=${encodeURIComponent(CONFIG.API.ITS_BASE + q)}`;
                         const fbRes = await fetchWithTimeout(fb);
                         const fbData = await fbRes.json();
-                        apiData = JSON.parse(fbData.contents);
+                        cctvDataArray = parseITSData(fbData.contents);
                     }
 
-                    if (!apiData.response || apiData.response.datacount === 0) {
+                    if (!cctvDataArray || cctvDataArray.length === 0) {
                         if (attempt === 1 && !isBroadSearch) return this.fetchActualCCTVData(bounds.pad(0.5), false, 2, autoPlay);
-                        if(!isBroadSearch) UI.showToast('해당 구역 내 가용 CCTV 없음', '#e74c3c');
+                        if(!isBroadSearch) UI.showToast('해당 반경 내 CCTV가 없습니다.', '#e74c3c');
                         return;
                     }
                     
-                    this.renderCCTVDots(apiData.response.data, autoPlay);
+                    this.renderCCTVDots(cctvDataArray, autoPlay);
 
                 } catch (error) { if(!isBroadSearch) UI.showToast('네트워크 연동 지연', '#e74c3c'); } 
                 finally { UI.hideLoading(); }
@@ -589,7 +624,7 @@
                         video.play(); badge.innerText = "LIVE"; badge.className = "video-badge active";
                     });
                     this.hlsInstance.on(Hls.Events.ERROR, () => {
-                        badge.innerText = "ERROR"; UI.showToast('수신 실패: 스트림 불안정', '#e74c3c');
+                        badge.innerText = "ERROR"; UI.showToast('스트림 수신 거절 (네트워크 룰 제약)', '#e74c3c');
                     });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = streamUrl;
@@ -607,7 +642,7 @@
                 if (badge) { badge.innerText = "대기"; badge.className = "video-badge"; }
                 
                 const wrapper = document.getElementById('video-content');
-                if(wrapper) wrapper.innerHTML = '<div class="placeholder">마커 또는 채널 선택</div>';
+                if(wrapper) wrapper.innerHTML = '<div class="placeholder">지도 상의 마커 또는 채널을 선택하십시오.</div>';
                 
                 State.activeCCTV = null;
                 document.getElementById('btn-fav-add').style.display = 'none';
@@ -620,7 +655,7 @@
 
                 if (this.currentLevel === 2) {
                     this.currentLevel = 1;
-                    UI.updateHeader('상위 구역');
+                    UI.updateHeader('상위 구역 복귀');
                     this.map.setZoom(8);
                 } else if (this.currentLevel === 1) {
                     this.currentLevel = 0;
