@@ -3,56 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>지역 검색 및 기상/CCTV 통합 대시보드</title>
+    <title>광역 인프라 및 기상 관측 통합 대시보드</title>
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     
     <style>
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: 'Malgun Gothic', sans-serif; background: #f5f6fa; color: #2f3640; overflow: hidden; }
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: 'Malgun Gothic', sans-serif; background: #1e272e; color: #dcdde1; overflow: hidden; }
         
-        #header { padding: 12px 20px; background: #1e272e; color: #fff; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 10; }
-        .btn-group button { padding: 8px 16px; margin-left: 8px; background: #485460; color: #fff; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; transition: background 0.2s; }
-        .btn-group button:hover { background: #808e9b; }
-        #btn-back { display: none; background: #e1b12c; color: #1e272e; }
-        #btn-back:hover { background: #fbc531; }
-
-        #content { display: flex; flex: 1; height: calc(100vh - 55px); }
-        #map-container { flex: 2; position: relative; }
-        #map { width: 100%; height: 100%; background: #c7ecee; }
+        /* 헤더 컨트롤 */
+        #header { padding: 12px 20px; background: #111; color: #fff; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.5); z-index: 10; height: 55px; border-bottom: 1px solid #2f3640; }
+        .btn-group button { padding: 8px 16px; margin-left: 8px; background: #2f3640; color: #fff; border: 1px solid #485460; cursor: pointer; border-radius: 4px; font-weight: bold; transition: all 0.2s; }
+        .btn-group button:hover { background: #485460; }
         
-        #side-panel { flex: 1; background: #2f3640; display: flex; flex-direction: column; padding: 15px; border-left: 1px solid #1e272e; overflow-y: auto; }
+        /* 레이아웃 분할 */
+        #content { display: flex; flex: 1; height: calc(100vh - 235px); } /* 하단 패널 확장(180px) 적용 */
+        #map-container { flex: 2; position: relative; border-right: 1px solid #2f3640; }
+        #map { width: 100%; height: 100%; background: #c8d6e5; }
         
-        #weather-widget { background: #353b48; padding: 15px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #485460; display: none; }
+        #side-panel { flex: 1; background: #1e272e; display: flex; flex-direction: column; padding: 15px; overflow-y: auto; }
+        
+        /* 기상 위젯 */
+        #weather-widget { background: #2f3640; padding: 15px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #485460; display: none; }
         .widget-header { font-size: 12px; color: #7f8fa6; margin-bottom: 8px; border-bottom: 1px solid #485460; padding-bottom: 5px; display: flex; justify-content: space-between; }
         .weather-main { font-size: 20px; font-weight: bold; color: #fbc531; margin-bottom: 5px; }
         .weather-sub { font-size: 13px; color: #dcdde1; line-height: 1.5; }
         
-        #video-wrapper { background: #000; flex: 1; border-radius: 6px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #485460; }
-        #video-header { padding: 10px 15px; background: #1e272e; color: #fff; font-size: 14px; font-weight: bold; border-bottom: 1px solid #485460; }
+        /* 비디오 메인 플레이어 */
+        #video-wrapper { background: #000; flex: 1; border-radius: 6px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #485460; min-height: 250px; position: relative; }
+        #video-header { padding: 10px 15px; background: #111; color: #fff; font-size: 14px; font-weight: bold; border-bottom: 1px solid #2f3640; display: flex; justify-content: space-between; align-items: center; }
+        .video-controls { display: flex; gap: 10px; align-items: center; }
+        
+        #btn-fav-add { padding: 4px 10px; background: #2ecc71; color: #111; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold; display: none; }
+        #btn-fav-add:hover { background: #27ae60; }
+        
         .placeholder { color: #7f8fa6; margin: auto; font-size: 14px; text-align: center; padding: 20px; }
+        video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+        .video-badge { font-size: 11px; padding: 2px 6px; border-radius: 3px; background: #7f8fa6; color: #fff; }
+        .video-badge.active { background: #e74c3c; animation: pulse 2s infinite; }
 
-        .region-label { background: transparent; border: none; box-shadow: none; font-weight: 800; color: #1e272e; text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; font-size: 13px; text-align: center; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-        #loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(47, 54, 64, 0.8); z-index: 1000; display: none; justify-content: center; align-items: center; flex-direction: column; color: #fff; }
-        .spinner { border: 4px solid rgba(255,255,255,0.1); border-top: 4px solid #fbc531; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 10px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* 지도 위 오버레이 (라벨 및 기상) */
+        /* 라벨과 기상 아이콘 겹침 방지를 위해 마진 분리 */
+        .region-label { background: transparent; border: none; box-shadow: none; font-weight: 900; color: #2f3640; text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff; font-size: 14px; text-align: center; pointer-events: none; margin-top: 15px !important; }
+        .map-weather-marker { background: rgba(30, 39, 46, 0.9); color: #fff; border: 1px solid #7f8fa6; border-radius: 12px; padding: 3px 8px; font-size: 12px; font-weight: bold; text-align: center; white-space: nowrap; box-shadow: 0 2px 5px rgba(0,0,0,0.5); pointer-events: none; margin-top: -25px !important; } /* 라벨 위로 오프셋 */
+        
+        .cctv-dot { display: block; width: 12px; height: 12px; background-color: #e74c3c; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
 
-        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
-        .toast { background: #353b48; color: #fff; padding: 12px 20px; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 14px; min-width: 250px; transform: translateX(120%); transition: transform 0.3s ease-out; border-left: 4px solid #3498db; }
+        /* 하단 즐겨찾기 패널 (CCTV 모니터 뷰) */
+        #bottom-panel { height: 180px; background: #111; border-top: 2px solid #2f3640; display: flex; flex-direction: column; }
+        #bottom-header { padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2f3640; background: #1e272e; }
+        #bottom-header span { color: #fbc531; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+        
+        #btn-edit-mode { padding: 4px 12px; background: #485460; color: #fff; border: 1px solid #7f8fa6; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold; transition: background 0.2s; }
+        #btn-edit-mode.active { background: #c0392b; border-color: #e74c3c; }
+
+        #bottom-bar { display: flex; align-items: center; padding: 12px 15px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; gap: 15px; flex: 1; }
+        #bottom-bar::-webkit-scrollbar { height: 8px; }
+        #bottom-bar::-webkit-scrollbar-track { background: #111; }
+        #bottom-bar::-webkit-scrollbar-thumb { background: #485460; border-radius: 4px; }
+        
+        /* 모니터 형태 카드 */
+        .fav-card { flex: 0 0 220px; background: #2f3640; border: 2px solid #485460; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; cursor: pointer; transition: border-color 0.2s; position: relative; height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .fav-card:hover { border-color: #2ecc71; }
+        
+        .fav-screen { height: 75px; background: #000; position: relative; display: flex; justify-content: center; align-items: center; border-bottom: 1px solid #1e272e; background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.05) 2px, rgba(255,255,255,0.05) 4px); } /* 주사선 효과 */
+        .fav-play-icon { font-size: 24px; color: rgba(255,255,255,0.6); }
+        .fav-live-tag { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.7); color: #e74c3c; font-size: 10px; font-weight: bold; padding: 2px 4px; border-radius: 3px; display: flex; align-items: center; gap: 4px; border: 1px solid #e74c3c; }
+        .fav-live-dot { width: 6px; height: 6px; background: #e74c3c; border-radius: 50%; animation: pulse 1s infinite; }
+        .fav-name-tag { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.7); color: #fff; font-size: 11px; padding: 2px 5px; border-radius: 3px; }
+        
+        .fav-details { padding: 6px 10px; background: #1e272e; display: flex; justify-content: space-between; align-items: center; flex: 1; }
+        .fav-loc { font-size: 11px; color: #bdc3c7; width: 65%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .fav-weather { font-size: 12px; font-weight: bold; width: 35%; text-align: right; }
+        
+        .fav-remove { display: none; position: absolute; top: 6px; right: 6px; background: rgba(231, 76, 60, 0.9); color: white; border: none; border-radius: 3px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; z-index: 10; }
+        .fav-remove:hover { background: #c0392b; }
+        #bottom-bar.edit-mode .fav-remove { display: block; }
+        #bottom-bar.edit-mode .fav-live-tag { display: none; }
+
+        .empty-fav { color: #7f8fa6; font-size: 13px; width: 100%; text-align: center; }
+
+        #loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(17, 17, 17, 0.85); z-index: 1000; display: none; justify-content: center; align-items: center; flex-direction: column; color: #fbc531; font-weight: bold; }
+        
+        #toast-container { position: fixed; bottom: 190px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: #2f3640; color: #fff; padding: 12px 20px; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-size: 14px; min-width: 250px; transform: translateX(120%); transition: transform 0.3s ease-out; border-left: 4px solid #3498db; }
         .toast.show { transform: translateX(0); }
-        .toast.error { border-left-color: #e74c3c; }
-        .toast.warning { border-left-color: #f1c40f; }
-        .toast.success { border-left-color: #2ecc71; }
     </style>
 </head>
 <body>
     <div id="header">
-        <span id="current-location-text">시스템 초기화 완료. 지역을 선택하십시오.</span>
+        <span id="current-location-text">대시보드 구동. 대상 구역을 지정하십시오.</span>
         <div class="btn-group">
-            <button id="btn-back" onclick="App.goBack()">◀ 상위 구역</button>
+            <button onclick="App.goBack()">이전 구역</button>
             <button onclick="App.resetMap()">전국 초기화</button>
         </div>
     </div>
@@ -60,30 +112,46 @@
     <div id="content">
         <div id="map-container">
             <div id="map"></div>
-            <div id="loading-overlay">
-                <div class="spinner"></div>
-                <span id="loading-text">데이터 동기화 중...</span>
-            </div>
+            <div id="loading-overlay">데이터 동기화 중...</div>
         </div>
         
         <div id="side-panel">
             <div id="weather-widget">
                 <div class="widget-header">
-                    <span>실시간 기상 관측망</span>
+                    <span>거점 기상망</span>
                     <span id="weather-time">-</span>
                 </div>
-                <div class="weather-main" id="weather-condition">데이터 대기중</div>
+                <div class="weather-main" id="weather-condition">대기</div>
                 <div class="weather-sub">
-                    <div id="weather-temp">온도: - ℃</div>
+                    <div id="weather-temp">기온: - ℃</div>
                     <div id="weather-wind">풍속: - km/h</div>
-                    <div id="weather-status" style="margin-top: 5px; font-weight: bold;">강수 상태: -</div>
+                    <div id="weather-status" style="margin-top: 5px; font-weight: bold;">상태: -</div>
                 </div>
             </div>
 
             <div id="video-wrapper">
-                <div id="video-header">CCTV 스트리밍</div>
-                <div id="video-status" class="placeholder">마커를 클릭하여 영상을 확인하십시오.</div>
+                <div id="video-header">
+                    <div>
+                        <span id="video-title">스트리밍 뷰어</span>
+                        <span id="video-badge" class="video-badge">대기</span>
+                    </div>
+                    <div class="video-controls">
+                        <button id="btn-fav-add" onclick="App.addCurrentToFavorites()">★ 채널 등록</button>
+                    </div>
+                </div>
+                <div id="video-content" class="placeholder">마커 또는 하단 채널을 선택하십시오.</div>
             </div>
+        </div>
+    </div>
+
+    <!-- CCTV 모니터 형태 즐겨찾기 패널 -->
+    <div id="bottom-panel">
+        <div id="bottom-header">
+            <span>로컬 관측 채널 목록</span>
+            <button id="btn-edit-mode" onclick="App.toggleEditMode()">편집 모드 (잠금)</button>
+        </div>
+        <div id="bottom-bar">
+            <div class="empty-fav">로컬 데이터를 불러오는 중...</div>
         </div>
     </div>
 
@@ -92,251 +160,444 @@
     <script>
         const CONFIG = {
             API: {
+                ITS_KEY: '70de7a2cb4cc411d8de01825666b6e80',
+                ITS_BASE: 'https://openapi.its.go.kr:9443/cctvInfo',
                 SIDO_GEOJSON: 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_provinces_geo_simple.json',
                 SIGUNGU_GEOJSON: 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_municipalities_geo_simple.json',
                 WEATHER: 'https://api.open-meteo.com/v1/forecast',
-                // 오리지널 테마 + 영문 라벨 제거 타일
+                GEOCODE: 'https://nominatim.openstreetmap.org/reverse',
                 MAP_TILE: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
             },
-            BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52))
+            BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
+            TIMEOUT: 8000,
+            MAJOR_CITIES: [
+                { name: '서울', lat: 37.5665, lng: 126.9780 }, { name: '부산', lat: 35.1796, lng: 129.0756 },
+                { name: '대구', lat: 35.8714, lng: 128.6014 }, { name: '인천', lat: 37.4563, lng: 126.7052 },
+                { name: '광주', lat: 35.1595, lng: 126.8526 }, { name: '대전', lat: 36.3504, lng: 127.3845 },
+                { name: '울산', lat: 35.5384, lng: 129.3114 }, { name: '세종', lat: 36.4800, lng: 127.2890 },
+                { name: '수원', lat: 37.2750, lng: 127.0094 }, { name: '춘천', lat: 37.8854, lng: 127.7298 },
+                { name: '청주', lat: 36.6356, lng: 127.4913 }, { name: '홍성', lat: 36.6013, lng: 126.6608 },
+                { name: '전주', lat: 35.8202, lng: 127.1086 }, { name: '무안', lat: 34.8161, lng: 126.4629 },
+                { name: '안동', lat: 36.5760, lng: 128.5056 }, { name: '창원', lat: 35.2383, lng: 128.6924 },
+                { name: '제주', lat: 33.4890, lng: 126.4983 }
+            ]
+        };
+
+        const State = {
+            sidoGeoJSON: null,
+            sigunguGeoJSON: null,
+            currentWeather: null,
+            activeCCTV: null,
+            isEditMode: false
         };
 
         const UI = {
-            showLoading: (msg) => {
-                document.getElementById('loading-text').innerText = msg || '데이터 처리 중...';
-                document.getElementById('loading-overlay').style.display = 'flex';
-            },
-            hideLoading: () => {
-                document.getElementById('loading-overlay').style.display = 'none';
-            },
-            showToast: (message, type = 'info') => {
+            showLoading: () => { document.getElementById('loading-overlay').style.display = 'flex'; },
+            hideLoading: () => { document.getElementById('loading-overlay').style.display = 'none'; },
+            showToast: (message, color = '#3498db') => {
                 const container = document.getElementById('toast-container');
                 const toast = document.createElement('div');
-                toast.className = `toast ${type}`;
+                toast.className = 'toast';
+                toast.style.borderLeftColor = color;
                 toast.innerText = message;
-                
                 container.appendChild(toast);
                 setTimeout(() => toast.classList.add('show'), 10);
-                
-                setTimeout(() => {
-                    toast.classList.remove('show');
-                    setTimeout(() => toast.remove(), 300);
-                }, 3000);
+                setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 2500);
             },
-            updateHeader: (text, showBack = false) => {
-                document.getElementById('current-location-text').innerText = text;
-                document.getElementById('btn-back').style.display = showBack ? 'inline-block' : 'none';
-            },
-            resetWeatherWidget: () => {
-                document.getElementById('weather-widget').style.display = 'none';
-            }
+            updateHeader: (text) => { document.getElementById('current-location-text').innerText = text; },
+            resetWeatherWidget: () => { document.getElementById('weather-widget').style.display = 'none'; }
         };
 
+        async function fetchWithTimeout(resource, options = {}) {
+            const { timeout = CONFIG.TIMEOUT } = options;
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            try {
+                const response = await fetch(resource, { ...options, signal: controller.signal });
+                clearTimeout(id); return response;
+            } catch (error) { clearTimeout(id); throw error; }
+        }
+
+        async function getAddressFromCoords(lat, lng) {
+            try {
+                const res = await fetchWithTimeout(`${CONFIG.API.GEOCODE}?format=json&lat=${lat}&lon=${lng}&zoom=14&accept-language=ko`, { timeout: 3000 });
+                const data = await res.json();
+                if (data && data.address) {
+                    const ad = data.address;
+                    let result = [];
+                    if (ad.city || ad.province) result.push(ad.city || ad.province);
+                    if (ad.borough || ad.county || ad.city_district) result.push(ad.borough || ad.county || ad.city_district);
+                    if (ad.suburb || ad.town || ad.village || ad.quarter) result.push(ad.suburb || ad.town || ad.village || ad.quarter);
+                    return result.join(' ') || '상세 구역 확인 불가';
+                }
+                return '행정구역 정보 없음';
+            } catch (e) { return '역지오코딩 지연'; }
+        }
+
+        function parseWeather(code) {
+            let icon = "☀️"; let text = "맑음"; let color = "#2ecc71"; let bg = "#353b48"; let rain = "정상";
+            if ([1, 2, 3].includes(code)) { icon = "☁️"; text = "구름/흐림"; }
+            else if ([45, 48].includes(code)) { icon = "🌫️"; text = "안개"; color = "#95a5a6"; }
+            else if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) { icon = "🌧️"; text = "강우"; color = "#e74c3c"; bg = "#4b2c2c"; rain = "강우 주의"; }
+            else if ([71, 73, 75, 77].includes(code)) { icon = "❄️"; text = "강설"; color = "#3498db"; bg = "#2c3e50"; rain = "강설 주의"; }
+            else if ([95, 96, 99].includes(code)) { icon = "⚡"; text = "낙뢰"; color = "#c0392b"; bg = "#5c2626"; rain = "위험"; }
+            return { icon, text, color, bg, rain };
+        }
+
         const App = {
-            map: null,
-            sidoLayer: null,
-            sigunguLayer: null,
-            cctvLayer: null,
-            currentLevel: 0,
+            map: null, sidoLayer: null, sigunguLayer: null, clusterGroup: null, mapWeatherLayer: null,
+            hlsInstance: null, currentLevel: 0, favorites: [],
 
             init: async function() {
                 this.initMap();
-                await this.loadSido();
                 this.initGeocoder();
-                UI.showToast('시스템이 정상적으로 로드되었습니다.', 'success');
+                this.loadFavorites();
+                await this.loadSpatialData();
+                this.fetchGlobalWeather();
+                this.fetchFavoritesWeather();
+                UI.showToast('시스템 초기화 완료', '#2ecc71');
             },
 
             initMap: function() {
-                this.map = L.map('map', { 
-                    center: [35.8, 127.5], zoom: 7, minZoom: 7, 
-                    maxBounds: CONFIG.BOUNDS, maxBoundsViscosity: 1.0 
-                });
+                this.map = L.map('map', { center: [35.8, 127.5], zoom: 7, minZoom: 7, maxBounds: CONFIG.BOUNDS, maxBoundsViscosity: 1.0 });
                 L.tileLayer(CONFIG.API.MAP_TILE, { attribution: 'CartoDB' }).addTo(this.map);
-                this.cctvLayer = L.featureGroup().addTo(this.map);
+                this.mapWeatherLayer = L.layerGroup().addTo(this.map);
+                this.clusterGroup = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50, spiderfyOnMaxZoom: true, disableClusteringAtZoom: 13 });
+                this.map.addLayer(this.clusterGroup);
             },
 
             initGeocoder: function() {
-                L.Control.geocoder({
-                    defaultMarkGeocode: false,
-                    placeholder: "지역 검색 (예: 서초구)"
-                }).on('markgeocode', (e) => {
-                    this.handleSearch(e.geocode.bbox, e.geocode.center, e.geocode.name);
+                L.Control.geocoder({ defaultMarkGeocode: false, placeholder: "검색" }).on('markgeocode', (e) => {
+                    this.executeDirectSearch(e.geocode.name, e.geocode.center.lat, e.geocode.center.lng);
                 }).addTo(this.map);
             },
 
-            loadSido: async function() {
-                UI.showLoading('행정구역 데이터 동기화 중...');
-                try {
-                    const response = await fetch(CONFIG.API.SIDO_GEOJSON);
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    const data = await response.json();
-                    
-                    this.sidoLayer = L.geoJSON(data, {
-                        style: { color: '#2980b9', weight: 2, fillOpacity: 0.05 },
-                        onEachFeature: (feature, layer) => {
-                            layer.bindTooltip(feature.properties.name, { permanent: true, direction: "center", className: "region-label" });
-                            layer.on('click', () => this.handleSidoClick(feature, layer));
-                        }
-                    }).addTo(this.map);
-                } catch (error) {
-                    UI.showToast('공간 데이터 로드 실패. 관리자에게 문의하십시오.', 'error');
-                } finally {
-                    UI.hideLoading();
+            // --- 지도 위 기상 오버레이 렌더링 ---
+            fetchGlobalWeather: async function() {
+                this.mapWeatherLayer.clearLayers();
+                const promises = CONFIG.MAJOR_CITIES.map(async city => {
+                    const res = await fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${city.lat}&longitude=${city.lng}&current_weather=true&timezone=Asia%2FSeoul`);
+                    const data = await res.json();
+                    return { lat: city.lat, lng: city.lng, weather: data.current_weather };
+                });
+                const results = await Promise.allSettled(promises);
+                this.renderWeatherMarkers(results);
+            },
+
+            fetchLocalWeather: async function(geoJsonLayer) {
+                this.mapWeatherLayer.clearLayers();
+                const promises = [];
+                geoJsonLayer.eachLayer(layer => {
+                    const center = layer.getBounds().getCenter();
+                    promises.push(
+                        fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${center.lat}&longitude=${center.lng}&current_weather=true&timezone=Asia%2FSeoul`)
+                        .then(res => res.json())
+                        .then(data => ({ lat: center.lat, lng: center.lng, weather: data.current_weather }))
+                    );
+                });
+                const results = await Promise.allSettled(promises);
+                this.renderWeatherMarkers(results);
+            },
+
+            renderWeatherMarkers: function(resultsSettled) {
+                resultsSettled.forEach(res => {
+                    if(res.status === 'fulfilled') {
+                        const w = res.value.weather;
+                        const p = parseWeather(w.weathercode);
+                        const html = `<div class="map-weather-marker" style="border-color:${p.color}">${p.icon} ${w.temperature}℃</div>`;
+                        const icon = L.divIcon({ html: html, className: '', iconSize: [70, 24], iconAnchor: [35, 12] });
+                        L.marker([res.value.lat, res.value.lng], { icon: icon, interactive: false }).addTo(this.mapWeatherLayer);
+                    }
+                });
+            },
+
+            // --- 편집 및 즐겨찾기 ---
+            toggleEditMode: function() {
+                State.isEditMode = !State.isEditMode;
+                const btn = document.getElementById('btn-edit-mode');
+                const addBtn = document.getElementById('btn-fav-add');
+                const bar = document.getElementById('bottom-bar');
+
+                if (State.isEditMode) {
+                    btn.innerText = '편집 완료 (해제)'; btn.classList.add('active'); bar.classList.add('edit-mode');
+                    if (State.activeCCTV) addBtn.style.display = 'inline-block';
+                    UI.showToast('편집 모드 가동: 항목 삭제 및 등록 허용', '#f39c12');
+                } else {
+                    btn.innerText = '편집 모드 (잠금)'; btn.classList.remove('active'); bar.classList.remove('edit-mode');
+                    addBtn.style.display = 'none';
                 }
+            },
+
+            loadFavorites: function() {
+                const stored = localStorage.getItem('cctv_fav_v4');
+                if (stored) { this.favorites = JSON.parse(stored); } 
+                else {
+                    this.favorites = [
+                        { id: 'f1', name: '양양(양양IC)', lat: 38.064, lng: 128.599, address: '강원도 양양군 서면', url: '' },
+                        { id: 'f2', name: '서울(양재)', lat: 37.464, lng: 127.033, address: '서울특별시 서초구 양재동', url: '' }
+                    ];
+                    this.saveFavorites();
+                }
+                this.renderFavoritesUI();
+            },
+
+            saveFavorites: function() { localStorage.setItem('cctv_fav_v4', JSON.stringify(this.favorites)); },
+
+            addCurrentToFavorites: async function() {
+                if (!State.isEditMode || !State.activeCCTV) return;
+                const cctv = State.activeCCTV;
+                if (this.favorites.find(f => f.name === cctv.name)) { UI.showToast('기등록된 채널입니다.', '#e74c3c'); return; }
+
+                UI.showLoading();
+                const address = await getAddressFromCoords(cctv.lat, cctv.lng);
+                this.favorites.unshift({ id: 'fav_' + Date.now(), name: cctv.name, lat: cctv.lat, lng: cctv.lng, url: cctv.url, address: address });
+                this.saveFavorites(); this.renderFavoritesUI(); this.fetchFavoritesWeather();
+                UI.hideLoading(); UI.showToast('채널 등록 완료', '#2ecc71');
+            },
+
+            removeFavorite: function(id, event) {
+                event.stopPropagation();
+                if (!State.isEditMode) return;
+                this.favorites = this.favorites.filter(f => f.id !== id);
+                this.saveFavorites(); this.renderFavoritesUI();
+            },
+
+            renderFavoritesUI: function() {
+                const bar = document.getElementById('bottom-bar');
+                bar.innerHTML = '';
+                if (this.favorites.length === 0) { bar.innerHTML = '<div class="empty-fav">로컬 채널이 없습니다.</div>'; return; }
+
+                this.favorites.forEach(fav => {
+                    const card = document.createElement('div');
+                    card.className = 'fav-card';
+                    card.onclick = () => { if(!State.isEditMode) this.executeDirectSearch(fav.name, fav.lat, fav.lng, true, fav.url); };
+                    
+                    card.innerHTML = `
+                        <button class="fav-remove" onclick="App.removeFavorite('${fav.id}', event)">삭제</button>
+                        <div class="fav-screen">
+                            <div class="fav-live-tag"><div class="fav-live-dot"></div>LIVE</div>
+                            <div class="fav-play-icon">▶</div>
+                            <div class="fav-name-tag">${fav.name}</div>
+                        </div>
+                        <div class="fav-details">
+                            <div class="fav-loc" title="${fav.address}">${fav.address}</div>
+                            <div class="fav-weather" id="fav-w-${fav.id}">-℃</div>
+                        </div>
+                    `;
+                    bar.appendChild(card);
+                });
+            },
+
+            fetchFavoritesWeather: async function() {
+                this.favorites.forEach(async (fav) => {
+                    try {
+                        const res = await fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${fav.lat}&longitude=${fav.lng}&current_weather=true&timezone=Asia%2FSeoul`);
+                        const data = await res.json();
+                        const parsed = parseWeather(data.current_weather.weathercode);
+                        const el = document.getElementById(`fav-w-${fav.id}`);
+                        if(el) { el.innerHTML = `<span style="color:${parsed.color}">${parsed.icon}</span> ${data.current_weather.temperature}℃`; }
+                    } catch(e) {}
+                });
+            },
+
+            // --- 공간 데이터 렌더링 ---
+            loadSpatialData: async function() {
+                UI.showLoading();
+                try {
+                    const [sidoRes, sigunguRes] = await Promise.all([ fetchWithTimeout(CONFIG.API.SIDO_GEOJSON), fetchWithTimeout(CONFIG.API.SIGUNGU_GEOJSON) ]);
+                    State.sidoGeoJSON = await sidoRes.json(); State.sigunguGeoJSON = await sigunguRes.json();
+                    this.renderSidoLayer();
+                } catch (e) { UI.showToast('공간 연동 실패', '#e74c3c'); } finally { UI.hideLoading(); }
+            },
+
+            renderSidoLayer: function() {
+                if(this.sidoLayer) this.map.removeLayer(this.sidoLayer);
+                this.sidoLayer = L.geoJSON(State.sidoGeoJSON, {
+                    style: { color: '#2980b9', weight: 2, fillOpacity: 0.05 },
+                    onEachFeature: (feature, layer) => {
+                        layer.bindTooltip(feature.properties.name, { permanent: true, direction: "center", className: "region-label" });
+                        layer.on('click', () => this.handleSidoClick(feature, layer));
+                    }
+                }).addTo(this.map);
             },
 
             handleSidoClick: async function(feature, layer) {
-                const sidoCode = feature.properties.code;
+                const code = feature.properties.code;
                 this.currentLevel = 1;
-                
-                UI.updateHeader(`[${feature.properties.name}] 선택 완료. 하위 구역을 지정하십시오.`, true);
+                UI.updateHeader(`[${feature.properties.name}] 하위 구역 확인`);
                 UI.resetWeatherWidget();
-                
                 this.map.removeLayer(this.sidoLayer);
                 this.map.fitBounds(layer.getBounds());
 
-                UI.showLoading('세부 행정구역 렌더링 중...');
-                try {
-                    const response = await fetch(CONFIG.API.SIGUNGU_GEOJSON);
-                    const data = await response.json();
-                    data.features = data.features.filter(f => f.properties.code.startsWith(sidoCode));
-
-                    this.sigunguLayer = L.geoJSON(data, {
-                        style: { color: '#8e44ad', weight: 1, fillOpacity: 0.1 },
-                        onEachFeature: (feature, subLayer) => {
-                            subLayer.bindTooltip(feature.properties.name, { permanent: true, direction: "center", className: "region-label" });
-                            subLayer.on('click', (e) => this.handleSigunguClick(feature.properties.name, subLayer.getBounds(), e.latlng));
-                        }
-                    }).addTo(this.map);
-                } catch (error) {
-                    UI.showToast('세부 구역 데이터를 불러오지 못했습니다.', 'error');
-                } finally {
-                    UI.hideLoading();
-                }
+                const filtered = { ...State.sigunguGeoJSON, features: State.sigunguGeoJSON.features.filter(f => f.properties.code.startsWith(code)) };
+                this.sigunguLayer = L.geoJSON(filtered, {
+                    style: { color: '#8e44ad', weight: 1, fillOpacity: 0.1 },
+                    onEachFeature: (feature, subLayer) => {
+                        subLayer.bindTooltip(feature.properties.name, { permanent: true, direction: "center", className: "region-label" });
+                        subLayer.on('click', (e) => this.handleSigunguClick(feature.properties.name, subLayer.getBounds(), e.latlng));
+                    }
+                }).addTo(this.map);
+                
+                this.fetchLocalWeather(this.sigunguLayer);
+                await this.fetchActualCCTVData(layer.getBounds(), true);
             },
 
             handleSigunguClick: function(name, bounds, latlng) {
-                this.currentLevel = 2;
-                this.map.fitBounds(bounds);
-                UI.updateHeader(`검색 대상: ${name}`, true);
-                
+                this.currentLevel = 2; this.map.fitBounds(bounds);
+                UI.updateHeader(`대상: ${name}`);
                 this.fetchWeatherData(latlng.lat, latlng.lng);
-                this.searchCCTVWithProximity(latlng.lat, latlng.lng);
             },
 
-            handleSearch: function(bbox, center, name) {
+            executeDirectSearch: function(name, lat, lng, autoPlay = false, forceUrl = '') {
+                if(State.isEditMode) return;
                 this.currentLevel = 2;
-                UI.updateHeader(`검색 결과: ${name}`, true);
-                this.map.fitBounds(bbox);
+                const bounds = L.latLngBounds([lat - 0.02, lng - 0.02], [lat + 0.02, lng + 0.02]);
+                this.map.fitBounds(bounds);
+                UI.updateHeader(`관측: ${name}`);
                 
                 if(this.sidoLayer) this.map.removeLayer(this.sidoLayer);
                 if(this.sigunguLayer) this.map.removeLayer(this.sigunguLayer);
                 
-                this.fetchWeatherData(center.lat, center.lng);
-                this.searchCCTVWithProximity(center.lat, center.lng);
+                this.fetchWeatherData(lat, lng);
+                this.mapWeatherLayer.clearLayers();
+                
+                if (autoPlay && forceUrl) {
+                    this.clearCCTVResources();
+                    this.renderMarkers(lat, lng, name, forceUrl);
+                    document.getElementById('video-title').innerText = `[송출] ${name}`;
+                    this.playCCTVStream(forceUrl, { name, lat, lng, url: forceUrl });
+                    this.fetchActualCCTVData(bounds, true, 1, false);
+                } else { this.fetchActualCCTVData(bounds, false, 1, autoPlay); }
             },
 
             fetchWeatherData: async function(lat, lon) {
-                document.getElementById('weather-widget').style.display = 'block';
-                document.getElementById('weather-condition').innerText = "분석 중...";
-                
-                const url = `${CONFIG.API.WEATHER}?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=Asia%2FSeoul`;
-
+                const widget = document.getElementById('weather-widget'); widget.style.display = 'block';
+                document.getElementById('weather-condition').innerText = "분석 중";
                 try {
-                    const response = await fetch(url);
-                    if(!response.ok) throw new Error('Weather API 통신 장애');
-                    const data = await response.json();
-                    const weather = data.current_weather;
+                    const res = await fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=Asia%2FSeoul`);
+                    const data = await res.json();
+                    State.currentWeather = data.current_weather;
 
                     const now = new Date();
-                    const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+                    const p = parseWeather(data.current_weather.weathercode);
+
+                    widget.style.backgroundColor = p.bg;
+                    document.getElementById('weather-time').innerText = `시각: ${now.getHours()}:${now.getMinutes().toString().padStart(2,'0')}`;
+                    document.getElementById('weather-condition').innerText = `${p.icon} ${p.text}`;
+                    document.getElementById('weather-temp').innerText = `온도: ${data.current_weather.temperature}℃`;
+                    document.getElementById('weather-wind').innerText = `풍속: ${data.current_weather.windspeed} km/h`;
+                    document.getElementById('weather-status').innerText = `분석: ${p.rain}`;
+                    document.getElementById('weather-status').style.color = p.color;
+                } catch (e) {}
+            },
+
+            fetchActualCCTVData: async function(bounds, isBroadSearch = false, attempt = 1, autoPlay = false) {
+                if(!isBroadSearch) this.clearCCTVResources();
+                if(!isBroadSearch) UI.showLoading();
+
+                const q = `?apiKey=${CONFIG.API.ITS_KEY}&type=all&cctvType=1&minX=${bounds.getWest().toFixed(5)}&maxX=${bounds.getEast().toFixed(5)}&minY=${bounds.getSouth().toFixed(5)}&maxY=${bounds.getNorth().toFixed(5)}&getType=json`;
+                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(CONFIG.API.ITS_BASE + q)}`;
+
+                try {
+                    const res = await fetchWithTimeout(proxyUrl);
+                    let apiData;
+                    try { apiData = await res.json(); } 
+                    catch(e) {
+                        const fb = `https://api.allorigins.win/get?url=${encodeURIComponent(CONFIG.API.ITS_BASE + q)}`;
+                        const fbRes = await fetchWithTimeout(fb);
+                        const fbData = await fbRes.json();
+                        apiData = JSON.parse(fbData.contents);
+                    }
+
+                    if (!apiData.response || apiData.response.datacount === 0) {
+                        if (attempt === 1 && !isBroadSearch) return this.fetchActualCCTVData(bounds.pad(0.5), false, 2, autoPlay);
+                        return;
+                    }
                     
-                    let conditionText = "상태 불명";
-                    let isRaining = "강수 없음";
-                    let statusColor = "#2ecc71";
+                    const markers = [];
+                    const dotIcon = L.divIcon({ className: 'cctv-dot', iconSize: [12, 12] });
 
-                    const code = weather.weathercode;
-                    if (code === 0) conditionText = "맑음";
-                    else if ([1, 2, 3].includes(code)) conditionText = "구름 많음/흐림";
-                    else if ([45, 48].includes(code)) conditionText = "안개";
-                    else if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) { 
-                        conditionText = "비/소나기"; isRaining = "강우 감지 (주의)"; statusColor = "#e74c3c"; 
-                    }
-                    else if ([71, 73, 75, 77].includes(code)) { 
-                        conditionText = "눈"; isRaining = "강설 감지 (주의)"; statusColor = "#3498db"; 
-                    }
-                    else if ([95, 96, 99].includes(code)) { 
-                        conditionText = "천둥번개/폭우"; isRaining = "위험 기상"; statusColor = "#c0392b"; 
-                    }
+                    apiData.response.data.forEach((cctv, i) => {
+                        const marker = L.marker([cctv.coordy, cctv.coordx], { icon: dotIcon });
+                        marker.bindPopup(`<b>[CCTV] ${cctv.cctvname}</b>`);
+                        marker.on('click', () => {
+                            document.getElementById('video-title').innerText = `[송출] ${cctv.cctvname}`;
+                            this.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
+                        });
+                        markers.push(marker);
 
-                    document.getElementById('weather-time').innerText = timeString;
-                    document.getElementById('weather-condition').innerText = conditionText;
-                    document.getElementById('weather-temp').innerText = `온도: ${weather.temperature}℃`;
-                    document.getElementById('weather-wind').innerText = `풍속: ${weather.windspeed} km/h`;
-                    
-                    const statusEl = document.getElementById('weather-status');
-                    statusEl.innerText = `상태: ${isRaining}`;
-                    statusEl.style.color = statusColor;
+                        if (autoPlay && i === 0) {
+                            document.getElementById('video-title').innerText = `[송출] ${cctv.cctvname}`;
+                            this.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
+                        }
+                    });
+                    this.clusterGroup.addLayers(markers);
+                } catch (error) {} 
+                finally { UI.hideLoading(); }
+            },
 
-                } catch (error) {
-                    UI.showToast('기상 데이터 연동 실패', 'warning');
-                    document.getElementById('weather-condition').innerText = "데이터 통신 오류";
+            playCCTVStream: function(streamUrl, cctvObj) {
+                const wrapper = document.getElementById('video-content');
+                const badge = document.getElementById('video-badge');
+                
+                State.activeCCTV = cctvObj;
+                if(State.isEditMode) document.getElementById('btn-fav-add').style.display = 'inline-block';
+                
+                if (this.hlsInstance) { this.hlsInstance.destroy(); this.hlsInstance = null; }
+
+                wrapper.innerHTML = '<video id="cctv-player" controls autoplay muted></video>';
+                const video = document.getElementById('cctv-player');
+                badge.innerText = "연결 중"; badge.className = "video-badge";
+
+                if (Hls.isSupported()) {
+                    this.hlsInstance = new Hls();
+                    this.hlsInstance.loadSource(streamUrl);
+                    this.hlsInstance.attachMedia(video);
+                    this.hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+                        video.play(); badge.innerText = "LIVE"; badge.className = "video-badge active";
+                    });
+                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                    video.src = streamUrl;
+                    video.addEventListener('loadedmetadata', () => {
+                        video.play(); badge.innerText = "LIVE"; badge.className = "video-badge active";
+                    });
                 }
             },
 
-            searchCCTVWithProximity: function(lat, lng) {
-                document.getElementById('video-header').innerText = "스트리밍 탐색 중...";
-                this.cctvLayer.clearLayers();
-                UI.showLoading('주변 인프라 검색 중...');
-
-                setTimeout(() => {
-                    UI.hideLoading();
-                    const isDataFound = Math.random() > 0.4;
-
-                    if (!isDataFound) {
-                        UI.showToast('해당 구역 내 CCTV가 없어 반경을 확장합니다.', 'warning');
-                        this.renderMarkers(lat + 0.05, lng + 0.05, "인접 우회 반경");
-                    } else {
-                        UI.showToast('CCTV 데이터 확보 완료', 'success');
-                        this.renderMarkers(lat, lng, "목표 구역");
-                    }
-                }, 800);
-            },
-
-            renderMarkers: function(lat, lng, prefix) {
-                document.getElementById('video-header').innerText = "스트리밍 대기 (마커 클릭)";
-                const marker = L.circleMarker([lat, lng], { radius: 7, color: '#fff', fillColor: '#e74c3c', fillOpacity: 1, weight: 2 });
-                marker.bindTooltip(`[영상] ${prefix}`);
-                marker.on('click', () => {
-                    document.getElementById('video-header').innerText = `[송출 중] ${prefix}`;
-                    document.getElementById('video-status').innerHTML = "<div style='color:#2ecc71; margin-top:20px;'>정상 송출중 (API 연결 대기상태)</div>";
-                });
-                this.cctvLayer.addLayer(marker);
-                this.map.setView([lat, lng], 11);
+            clearCCTVResources: function() {
+                if (this.hlsInstance) { this.hlsInstance.destroy(); this.hlsInstance = null; }
+                if (this.clusterGroup) this.clusterGroup.clearLayers();
+                
+                const badge = document.getElementById('video-badge');
+                if (badge) { badge.innerText = "대기"; badge.className = "video-badge"; }
+                
+                const wrapper = document.getElementById('video-content');
+                if(wrapper) wrapper.innerHTML = '마커 또는 하단 채널을 선택하십시오.';
+                
+                State.activeCCTV = null;
+                document.getElementById('btn-fav-add').style.display = 'none';
             },
 
             goBack: function() {
-                this.cctvLayer.clearLayers();
+                this.clearCCTVResources();
                 UI.resetWeatherWidget();
 
                 if (this.currentLevel === 2) {
                     this.currentLevel = 1;
-                    UI.updateHeader('상위 구역 복귀 완료. 시/군/구를 선택하십시오.', true);
+                    UI.updateHeader('상위 구역 복귀');
                     this.map.setZoom(8);
+                    if(this.sigunguLayer) this.fetchActualCCTVData(this.sigunguLayer.getBounds(), true);
                 } else if (this.currentLevel === 1) {
                     this.currentLevel = 0;
-                    UI.updateHeader('대한민국 (시/도를 선택하거나 검색하세요)', false);
+                    UI.updateHeader('대상 구역을 지정하십시오.');
                     if (this.sigunguLayer) this.map.removeLayer(this.sigunguLayer);
-                    this.map.addLayer(this.sidoLayer);
+                    this.renderSidoLayer();
+                    this.fetchGlobalWeather();
                     this.map.setView([35.8, 127.5], 7);
                 }
             },
 
-            resetMap: function() {
-                this.currentLevel = 1;
-                this.goBack();
-                UI.showToast('지도가 초기화되었습니다.');
-            }
+            resetMap: function() { this.currentLevel = 1; this.goBack(); }
         };
 
         document.addEventListener('DOMContentLoaded', () => App.init());
