@@ -1,3 +1,4 @@
+// api/cctv.js
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -14,20 +15,44 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: '경위도 범위 파라미터 누락' });
   }
 
-  const targetUrl = `https://openapi.its.go.kr/cctvInfo?apiKey=${apiKey}&type=${type}&cctvType=${cctvType}&minX=${minX}&maxX=${maxX}&minY=${minY}&maxY=${maxY}&getType=json`;
+  const queryParams = new URLSearchParams({
+    apiKey,
+    type,
+    cctvType,
+    minX,
+    maxX,
+    minY,
+    maxY,
+    getType: 'json'
+  }).toString();
 
-  try {
-    const response = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+  const endpoints = [
+    `https://openapi.its.go.kr/cctvInfo?${queryParams}`,
+    `http://openapi.its.go.kr/cctvInfo?${queryParams}`,
+    `https://openapi.its.go.kr:9443/cctvInfo?${queryParams}`
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': '*/*'
+        }
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.text();
+      // 유효한 데이터가 수신된 경우 반환
+      if (data && data.length > 50) {
+        res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json');
+        return res.status(200).send(data);
       }
-    });
-
-    const data = await response.text();
-    res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json');
-    return res.status(response.status).send(data);
-  } catch (error) {
-    return res.status(500).json({ error: 'ITS API 통신 실패', details: error.message });
+    } catch (e) {
+      // 다음 엔드포인트 시도
+    }
   }
-}
 
+  return res.status(502).json({ error: '국토부 ITS API 응답 없음' });
+}
