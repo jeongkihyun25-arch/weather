@@ -17,7 +17,7 @@
     
     <style>
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100dvh; font-family: 'Malgun Gothic', sans-serif; background: #1e272e; color: #dcdde1; overflow: hidden; }
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100dvh; font-family: 'Malgun Gothic', -apple-system, BlinkMacSystemFont, sans-serif; background: #1e272e; color: #dcdde1; overflow: hidden; }
         
         #header { flex: 0 0 55px; padding: 0 15px; background: #111; color: #fff; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.5); z-index: 10; border-bottom: 1px solid #2f3640; }
         #current-location-text { font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw; }
@@ -41,7 +41,7 @@
         #video-header { flex: 0 0 auto; padding: 8px 12px; background: #111; color: #fff; font-size: 13px; font-weight: bold; border-bottom: 1px solid #2f3640; display: flex; justify-content: space-between; align-items: center; }
         #video-content { flex: 1; display: flex; position: relative; }
         .placeholder { color: #7f8fa6; margin: auto; font-size: 13px; text-align: center; padding: 15px; }
-        video { width: 100%; height: 100%; object-fit: contain; background: #000; position: absolute; top:0; left:0; }
+        video { width: 100%; height: 100%; object-fit: contain; background: #000; position: absolute; top: 0; left: 0; }
         
         .video-controls { display: flex; gap: 8px; align-items: center; }
         #btn-fav-add { padding: 4px 8px; background: #2ecc71; color: #111; border: none; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: bold; display: none; }
@@ -50,7 +50,6 @@
         .video-badge.active { background: #e74c3c; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-        /* 통합 마커 (지역명 + 기상 결합, 클릭 간섭 완벽 차단) */
         .leaflet-div-icon-custom { background: transparent; border: none; pointer-events: none !important; }
         .integrated-marker { background: rgba(30, 39, 46, 0.95); color: #fff; border: 1px solid #7f8fa6; border-radius: 6px; font-size: 12px; text-align: center; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: translate(-50%, -50%); pointer-events: none; }
         .im-name { font-weight: 900; background: rgba(0, 0, 0, 0.4); padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.2); pointer-events: none; }
@@ -88,7 +87,6 @@
 
         .empty-fav { color: #7f8fa6; font-size: 12px; width: 100%; text-align: center; }
 
-        /* 로딩 오버레이 및 알림 토스트 */
         #loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(17, 17, 17, 0.85); z-index: 1000; display: none; justify-content: center; align-items: center; flex-direction: column; color: #fbc531; font-size: 13px; font-weight: bold; }
         .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #fbc531; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin-bottom: 8px; }
         
@@ -169,7 +167,17 @@
         const CONFIG = {
             API: {
                 ITS_KEY: '70de7a2cb4cc411d8de01825666b6e80',
-                ITS_BASE: 'https://openapi.its.go.kr:9443/cctvInfo',
+                ITS_ENDPOINTS: [
+                    'https://openapi.its.go.kr/cctvInfo',
+                    'https://openapi.its.go.kr:9443/cctvInfo',
+                    'http://openapi.its.go.kr/cctvInfo'
+                ],
+                PROXIES: [
+                    (url) => url,
+                    (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+                    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+                    (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
+                ],
                 SIDO_GEOJSON: 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_provinces_geo_simple.json',
                 SIGUNGU_GEOJSON: 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_municipalities_geo_simple.json',
                 WEATHER: 'https://api.open-meteo.com/v1/forecast',
@@ -177,7 +185,7 @@
                 MAP_TILE: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
             },
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
-            TIMEOUT: 12000,
+            TIMEOUT: 8000,
             MAJOR_CITIES: [
                 { name: '서울특별시', lat: 37.5665, lng: 126.9780 }, { name: '부산광역시', lat: 35.1796, lng: 129.0756 },
                 { name: '대구광역시', lat: 35.8714, lng: 128.6014 }, { name: '인천광역시', lat: 37.4563, lng: 126.7052 },
@@ -210,7 +218,7 @@
                 toast.innerText = message;
                 container.appendChild(toast);
                 setTimeout(() => toast.classList.add('show'), 10);
-                setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 2000);
+                setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 2500);
             },
             updateHeader: (text) => { document.getElementById('current-location-text').innerText = text; },
             resetWeatherWidget: () => { document.getElementById('weather-widget').style.display = 'none'; }
@@ -226,33 +234,46 @@
             } catch (error) { clearTimeout(id); throw error; }
         }
 
-        // 통합 파서: ITS API가 JSON 대신 XML을 강제 반환할 경우를 완벽 방어
-        function parseITSData(rawContent) {
+        function safeParseITSData(rawContent) {
             if (!rawContent) return [];
-            try {
-                // 1. JSON 파싱 시도
-                const json = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-                if (json?.response?.data) return json.response.data;
-                if (Array.isArray(json)) return json;
-            } catch (e) {}
+            let list = [];
 
-            // 2. XML 파싱 (Fallback)
+            // JSON 파싱 시도
             try {
-                const parser = new DOMParser();
-                const xml = parser.parseFromString(rawContent, 'text/xml');
-                const dataNodes = xml.querySelectorAll('data');
-                const results = [];
-                dataNodes.forEach(node => {
-                    results.push({
-                        cctvname: node.querySelector('cctvname')?.textContent || '무명',
-                        coordy: parseFloat(node.querySelector('coordy')?.textContent || 0),
-                        coordx: parseFloat(node.querySelector('coordx')?.textContent || 0),
-                        cctvurl: node.querySelector('cctvurl')?.textContent || ''
+                const json = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+                if (json?.response?.data) {
+                    list = Array.isArray(json.response.data) ? json.response.data : [json.response.data];
+                } else if (Array.isArray(json)) {
+                    list = json;
+                }
+            } catch (e) {
+                // XML Fallback
+                try {
+                    const parser = new DOMParser();
+                    const xml = parser.parseFromString(rawContent, 'text/xml');
+                    const items = xml.querySelectorAll('data');
+                    items.forEach(node => {
+                        const getTag = (t) => node.querySelector(t)?.textContent || node.querySelector(t.toLowerCase())?.textContent || node.querySelector(t.toUpperCase())?.textContent || '';
+                        list.push({
+                            cctvname: getTag('cctvname') || getTag('cctvName'),
+                            cctvurl: getTag('cctvurl') || getTag('cctvUrl'),
+                            coordx: parseFloat(getTag('coordx') || getTag('coordX') || 0),
+                            coordy: parseFloat(getTag('coordy') || getTag('coordY') || 0),
+                            cctvformat: getTag('cctvformat') || getTag('cctvFormat') || 'HLS'
+                        });
                     });
-                });
-                return results;
-            } catch (e) {}
-            return [];
+                } catch (xmlErr) {
+                    return [];
+                }
+            }
+
+            return list.map(item => ({
+                cctvname: item.cctvname || item.cctvName || '교통 CCTV',
+                cctvurl: item.cctvurl || item.cctvUrl || '',
+                coordx: parseFloat(item.coordx || item.coordX || 0),
+                coordy: parseFloat(item.coordy || item.coordY || 0),
+                cctvformat: item.cctvformat || item.cctvFormat || 'HLS'
+            })).filter(item => item.cctvurl && item.cctvurl.trim() !== '');
         }
 
         async function getAddressFromCoords(lat, lng) {
@@ -306,7 +327,6 @@
 
             initGeocoder: function() {
                 L.Control.geocoder({ defaultMarkGeocode: false, placeholder: "검색" }).on('markgeocode', async (e) => {
-                    // 검색된 좌표를 바탕으로 가장 인접한 시/군/구명을 추출하여 헤더에 표출
                     const addr = await getAddressFromCoords(e.geocode.center.lat, e.geocode.center.lng);
                     this.executeDirectSearch(addr, e.geocode.center.lat, e.geocode.center.lng);
                 }).addTo(this.map);
@@ -431,7 +451,7 @@
                     card.innerHTML = `
                         <button class="fav-remove" onclick="App.removeFavorite('${fav.id}', event)">삭제</button>
                         <div class="fav-screen">
-                            <div class="fav-live-tag"><div class="fav-live-dot"></div>LIVE</div>
+                            <div class="fav-live-tag">LIVE</div>
                             <div class="fav-play-icon">▶</div>
                             <div class="fav-name-tag">${fav.name}</div>
                         </div>
@@ -548,38 +568,65 @@
                 } catch (e) { UI.showToast('기상 수신 실패', '#e74c3c'); }
             },
 
+            // 다중 엔드포인트 및 다중 프록시 폴백 CCTV 요청 로직
             fetchActualCCTVData: async function(bounds, isBroadSearch = false, attempt = 1, autoPlay = false) {
                 if(!isBroadSearch) this.clearCCTVResources();
                 if(!isBroadSearch) UI.showLoading('인프라 좌표 렌더링');
 
-                const q = `?apiKey=${CONFIG.API.ITS_KEY}&type=all&cctvType=1&minX=${bounds.getWest().toFixed(5)}&maxX=${bounds.getEast().toFixed(5)}&minY=${bounds.getSouth().toFixed(5)}&maxY=${bounds.getNorth().toFixed(5)}&getType=json`;
+                const minX = bounds.getWest().toFixed(5);
+                const maxX = bounds.getEast().toFixed(5);
+                const minY = bounds.getSouth().toFixed(5);
+                const maxY = bounds.getNorth().toFixed(5);
+
+                const queryParam = `?apiKey=${CONFIG.API.ITS_KEY}&type=all&cctvType=1&minX=${minX}&maxX=${maxX}&minY=${minY}&maxY=${maxY}&getType=json`;
                 
-                try {
-                    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(CONFIG.API.ITS_BASE + q)}`;
-                    const res = await fetchWithTimeout(proxyUrl);
-                    let rawData = await res.text();
+                let cctvDataArray = [];
+
+                // 엔드포인트 및 프록시 매트릭스 순차 호출
+                for (const base of CONFIG.API.ITS_ENDPOINTS) {
+                    const fullTargetUrl = `${base}${queryParam}`;
                     
-                    // XML/JSON 범용 파싱
-                    let cctvDataArray = parseITSData(rawData);
+                    for (const proxyBuilder of CONFIG.API.PROXIES) {
+                        const targetUrl = proxyBuilder(fullTargetUrl);
+                        const isAllOriginsGet = targetUrl.includes('api.allorigins.win/get');
 
-                    if (!cctvDataArray || cctvDataArray.length === 0) {
-                        // 1차 실패 시 allorigins로 우회 시도
-                        const fb = `https://api.allorigins.win/get?url=${encodeURIComponent(CONFIG.API.ITS_BASE + q)}`;
-                        const fbRes = await fetchWithTimeout(fb);
-                        const fbData = await fbRes.json();
-                        cctvDataArray = parseITSData(fbData.contents);
+                        try {
+                            const res = await fetchWithTimeout(targetUrl, { timeout: 3500 });
+                            if (!res.ok) continue;
+
+                            let rawText = await res.text();
+                            if (isAllOriginsGet) {
+                                try {
+                                    const jsonWrap = JSON.parse(rawText);
+                                    rawText = jsonWrap.contents;
+                                } catch { continue; }
+                            }
+
+                            // 프록시 에러 HTML 조기 차단
+                            if (typeof rawText === 'string' && (rawText.trim().startsWith('<!DOCTYPE') || rawText.trim().startsWith('<html'))) {
+                                continue;
+                            }
+
+                            cctvDataArray = safeParseITSData(rawText);
+                            if (cctvDataArray && cctvDataArray.length > 0) break;
+                        } catch (err) {
+                            // 다음 프록시 시도
+                        }
                     }
+                    if (cctvDataArray && cctvDataArray.length > 0) break;
+                }
 
-                    if (!cctvDataArray || cctvDataArray.length === 0) {
-                        if (attempt === 1 && !isBroadSearch) return this.fetchActualCCTVData(bounds.pad(0.5), false, 2, autoPlay);
-                        if(!isBroadSearch) UI.showToast('해당 반경 내 CCTV가 없습니다.', '#e74c3c');
-                        return;
+                UI.hideLoading();
+
+                if (!cctvDataArray || cctvDataArray.length === 0) {
+                    if (attempt === 1 && !isBroadSearch) {
+                        return this.fetchActualCCTVData(bounds.pad(0.5), false, 2, autoPlay);
                     }
-                    
-                    this.renderCCTVDots(cctvDataArray, autoPlay);
-
-                } catch (error) { if(!isBroadSearch) UI.showToast('네트워크 연동 지연', '#e74c3c'); } 
-                finally { UI.hideLoading(); }
+                    if(!isBroadSearch) UI.showToast('해당 반경 내 CCTV가 없습니다.', '#e74c3c');
+                    return;
+                }
+                
+                this.renderCCTVDots(cctvDataArray, autoPlay);
             },
 
             renderCCTVDots: function(cctvArray, autoPlay = false) {
@@ -612,24 +659,26 @@
                 
                 if (this.hlsInstance) { this.hlsInstance.destroy(); this.hlsInstance = null; }
 
-                wrapper.innerHTML = '<video id="cctv-player" controls autoplay muted></video>';
+                wrapper.innerHTML = '<video id="cctv-player" controls autoplay muted playsinline></video>';
                 const video = document.getElementById('cctv-player');
                 badge.innerText = "연결 중"; badge.className = "video-badge";
 
                 if (Hls.isSupported()) {
-                    this.hlsInstance = new Hls();
+                    this.hlsInstance = new Hls({ enableWorker: true, lowLatencyMode: true });
                     this.hlsInstance.loadSource(streamUrl);
                     this.hlsInstance.attachMedia(video);
                     this.hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-                        video.play(); badge.innerText = "LIVE"; badge.className = "video-badge active";
+                        video.play().catch(() => {});
+                        badge.innerText = "LIVE"; badge.className = "video-badge active";
                     });
                     this.hlsInstance.on(Hls.Events.ERROR, () => {
-                        badge.innerText = "ERROR"; UI.showToast('스트림 수신 거절 (네트워크 룰 제약)', '#e74c3c');
+                        badge.innerText = "ERROR"; UI.showToast('스트림 수신 제약 (네트워크 정책)', '#e74c3c');
                     });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = streamUrl;
                     video.addEventListener('loadedmetadata', () => {
-                        video.play(); badge.innerText = "LIVE"; badge.className = "video-badge active";
+                        video.play().catch(() => {});
+                        badge.innerText = "LIVE"; badge.className = "video-badge active";
                     });
                 }
             },
@@ -659,7 +708,7 @@
                     this.map.setZoom(8);
                 } else if (this.currentLevel === 1) {
                     this.currentLevel = 0;
-                    UI.updateHeader('대상 구역을 지정하십시오.');
+                    UI.updateHeader('시스템 동기화 완료. 관측 대상 시/도를 선택하십시오.');
                     this.renderGeoLayer(State.sidoGeoJSON, 1);
                     this.fetchGlobalWeather();
                     this.map.setView([35.8, 127.5], 7);
@@ -673,5 +722,3 @@
     </script>
 </body>
 </html>
-
-
