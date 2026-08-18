@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>광역 인프라 및 기상 관측 통합 대시보드</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -17,115 +17,123 @@
     
     <style>
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: 'Malgun Gothic', sans-serif; background: #1e272e; color: #dcdde1; overflow: hidden; }
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100dvh; font-family: 'Malgun Gothic', sans-serif; background: #1e272e; color: #dcdde1; overflow: hidden; }
         
-        /* 헤더 컨트롤 */
-        #header { padding: 12px 20px; background: #111; color: #fff; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.5); z-index: 10; height: 55px; border-bottom: 1px solid #2f3640; }
-        .btn-group button { padding: 8px 16px; margin-left: 8px; background: #2f3640; color: #fff; border: 1px solid #485460; cursor: pointer; border-radius: 4px; font-weight: bold; transition: all 0.2s; }
-        .btn-group button:hover { background: #485460; }
+        #header { flex: 0 0 55px; padding: 0 15px; background: #111; color: #fff; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.5); z-index: 10; border-bottom: 1px solid #2f3640; }
+        #current-location-text { font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw; }
+        .btn-group { display: flex; gap: 8px; flex-shrink: 0; }
+        .btn-group button { padding: 6px 12px; background: #2f3640; color: #fff; border: 1px solid #485460; cursor: pointer; border-radius: 4px; font-size: 12px; font-weight: bold; transition: background 0.2s; }
+        .btn-group button:active { background: #485460; }
         
-        /* 레이아웃 분할 */
-        #content { display: flex; flex: 1; height: calc(100vh - 235px); } /* 하단 패널 확장(180px) 적용 */
-        #map-container { flex: 2; position: relative; border-right: 1px solid #2f3640; }
-        #map { width: 100%; height: 100%; background: #c8d6e5; }
+        #content { display: flex; flex: 1; flex-direction: row; min-height: 0; }
         
-        #side-panel { flex: 1; background: #1e272e; display: flex; flex-direction: column; padding: 15px; overflow-y: auto; }
+        #map-container { flex: 2; position: relative; border-right: 1px solid #2f3640; display: flex; flex-direction: column; min-height: 0; }
+        #map { flex: 1; width: 100%; background: #c8d6e5; }
         
-        /* 기상 위젯 */
-        #weather-widget { background: #2f3640; padding: 15px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #485460; display: none; }
-        .widget-header { font-size: 12px; color: #7f8fa6; margin-bottom: 8px; border-bottom: 1px solid #485460; padding-bottom: 5px; display: flex; justify-content: space-between; }
-        .weather-main { font-size: 20px; font-weight: bold; color: #fbc531; margin-bottom: 5px; }
-        .weather-sub { font-size: 13px; color: #dcdde1; line-height: 1.5; }
+        #side-panel { flex: 1; background: #1e272e; display: flex; flex-direction: column; padding: 12px; overflow-y: auto; min-width: 300px; gap: 12px; }
         
-        /* 비디오 메인 플레이어 */
-        #video-wrapper { background: #000; flex: 1; border-radius: 6px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #485460; min-height: 250px; position: relative; }
-        #video-header { padding: 10px 15px; background: #111; color: #fff; font-size: 14px; font-weight: bold; border-bottom: 1px solid #2f3640; display: flex; justify-content: space-between; align-items: center; }
-        .video-controls { display: flex; gap: 10px; align-items: center; }
+        #weather-widget { flex: 0 0 auto; background: #2f3640; padding: 12px; border-radius: 6px; border: 1px solid #485460; display: none; transition: background 0.3s ease; }
+        .widget-header { font-size: 11px; color: #7f8fa6; margin-bottom: 8px; border-bottom: 1px solid #485460; padding-bottom: 4px; display: flex; justify-content: space-between; }
+        .weather-main { font-size: 18px; font-weight: bold; color: #fbc531; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+        .weather-sub { font-size: 12px; color: #dcdde1; line-height: 1.4; }
         
-        #btn-fav-add { padding: 4px 10px; background: #2ecc71; color: #111; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold; display: none; }
-        #btn-fav-add:hover { background: #27ae60; }
+        #video-wrapper { background: #000; flex: 1; border-radius: 6px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #485460; min-height: 200px; position: relative; }
+        #video-header { flex: 0 0 auto; padding: 8px 12px; background: #111; color: #fff; font-size: 13px; font-weight: bold; border-bottom: 1px solid #2f3640; display: flex; justify-content: space-between; align-items: center; }
+        #video-content { flex: 1; display: flex; position: relative; }
+        .placeholder { color: #7f8fa6; margin: auto; font-size: 13px; text-align: center; padding: 15px; }
+        video { width: 100%; height: 100%; object-fit: contain; background: #000; position: absolute; top:0; left:0; }
         
-        .placeholder { color: #7f8fa6; margin: auto; font-size: 14px; text-align: center; padding: 20px; }
-        video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-        .video-badge { font-size: 11px; padding: 2px 6px; border-radius: 3px; background: #7f8fa6; color: #fff; }
+        .video-controls { display: flex; gap: 8px; align-items: center; }
+        #btn-fav-add { padding: 4px 8px; background: #2ecc71; color: #111; border: none; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: bold; display: none; }
+        
+        .video-badge { font-size: 10px; padding: 2px 4px; border-radius: 3px; background: #7f8fa6; color: #fff; margin-left: 6px; }
         .video-badge.active { background: #e74c3c; animation: pulse 2s infinite; }
-
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-        /* 지도 위 오버레이 (라벨 및 기상) */
-        /* 라벨과 기상 아이콘 겹침 방지를 위해 마진 분리 */
-        .region-label { background: transparent; border: none; box-shadow: none; font-weight: 900; color: #2f3640; text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff; font-size: 14px; text-align: center; pointer-events: none; margin-top: 15px !important; }
-        .map-weather-marker { background: rgba(30, 39, 46, 0.9); color: #fff; border: 1px solid #7f8fa6; border-radius: 12px; padding: 3px 8px; font-size: 12px; font-weight: bold; text-align: center; white-space: nowrap; box-shadow: 0 2px 5px rgba(0,0,0,0.5); pointer-events: none; margin-top: -25px !important; } /* 라벨 위로 오프셋 */
+        /* 통합 마커 (클릭 간섭 원천 차단) */
+        .leaflet-div-icon-custom { background: transparent; border: none; pointer-events: none !important; }
+        .integrated-marker { background: rgba(30, 39, 46, 0.95); color: #fff; border: 1px solid #7f8fa6; border-radius: 6px; font-size: 12px; text-align: center; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: translate(-50%, -50%); pointer-events: none; }
+        .im-name { font-weight: 900; background: rgba(0, 0, 0, 0.4); padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.2); pointer-events: none; }
+        .im-weather { padding: 4px 8px; font-weight: bold; display: flex; align-items: center; gap: 6px; justify-content: center; pointer-events: none; }
         
-        .cctv-dot { display: block; width: 12px; height: 12px; background-color: #e74c3c; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+        .cctv-dot { display: block; width: 14px; height: 14px; background-color: #e74c3c; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.6); cursor: pointer; }
 
-        /* 하단 즐겨찾기 패널 (CCTV 모니터 뷰) */
-        #bottom-panel { height: 180px; background: #111; border-top: 2px solid #2f3640; display: flex; flex-direction: column; }
-        #bottom-header { padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2f3640; background: #1e272e; }
-        #bottom-header span { color: #fbc531; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+        #bottom-panel { flex: 0 0 160px; background: #111; border-top: 2px solid #2f3640; display: flex; flex-direction: column; width: 100%; overflow: hidden; }
+        #bottom-header { flex: 0 0 32px; padding: 0 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2f3640; background: #1e272e; }
+        #bottom-header span { color: #fbc531; font-size: 12px; font-weight: bold; }
         
-        #btn-edit-mode { padding: 4px 12px; background: #485460; color: #fff; border: 1px solid #7f8fa6; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold; transition: background 0.2s; }
+        #btn-edit-mode { padding: 4px 10px; background: #485460; color: #fff; border: 1px solid #7f8fa6; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: bold; }
         #btn-edit-mode.active { background: #c0392b; border-color: #e74c3c; }
 
-        #bottom-bar { display: flex; align-items: center; padding: 12px 15px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; gap: 15px; flex: 1; }
-        #bottom-bar::-webkit-scrollbar { height: 8px; }
+        #bottom-bar { display: flex; align-items: center; padding: 10px 15px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; gap: 12px; flex: 1; -webkit-overflow-scrolling: touch; }
+        #bottom-bar::-webkit-scrollbar { height: 6px; }
         #bottom-bar::-webkit-scrollbar-track { background: #111; }
-        #bottom-bar::-webkit-scrollbar-thumb { background: #485460; border-radius: 4px; }
+        #bottom-bar::-webkit-scrollbar-thumb { background: #485460; border-radius: 3px; }
         
-        /* 모니터 형태 카드 */
-        .fav-card { flex: 0 0 220px; background: #2f3640; border: 2px solid #485460; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; cursor: pointer; transition: border-color 0.2s; position: relative; height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .fav-card:hover { border-color: #2ecc71; }
+        .fav-card { flex: 0 0 160px; background: #2f3640; border: 1px solid #485460; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; cursor: pointer; position: relative; height: 95px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: border-color 0.2s; }
+        .fav-card:active { border-color: #2ecc71; }
         
-        .fav-screen { height: 75px; background: #000; position: relative; display: flex; justify-content: center; align-items: center; border-bottom: 1px solid #1e272e; background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.05) 2px, rgba(255,255,255,0.05) 4px); } /* 주사선 효과 */
-        .fav-play-icon { font-size: 24px; color: rgba(255,255,255,0.6); }
-        .fav-live-tag { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.7); color: #e74c3c; font-size: 10px; font-weight: bold; padding: 2px 4px; border-radius: 3px; display: flex; align-items: center; gap: 4px; border: 1px solid #e74c3c; }
-        .fav-live-dot { width: 6px; height: 6px; background: #e74c3c; border-radius: 50%; animation: pulse 1s infinite; }
-        .fav-name-tag { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.7); color: #fff; font-size: 11px; padding: 2px 5px; border-radius: 3px; }
+        .fav-screen { height: 50px; background: #000; position: relative; display: flex; justify-content: center; align-items: center; border-bottom: 1px solid #1e272e; }
+        .fav-play-icon { font-size: 18px; color: rgba(255,255,255,0.6); }
+        .fav-live-tag { position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.7); color: #e74c3c; font-size: 9px; font-weight: bold; padding: 1px 3px; border-radius: 2px; border: 1px solid #e74c3c; }
+        .fav-name-tag { position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.7); color: #fff; font-size: 10px; padding: 1px 4px; border-radius: 2px; }
         
-        .fav-details { padding: 6px 10px; background: #1e272e; display: flex; justify-content: space-between; align-items: center; flex: 1; }
-        .fav-loc { font-size: 11px; color: #bdc3c7; width: 65%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .fav-weather { font-size: 12px; font-weight: bold; width: 35%; text-align: right; }
+        .fav-details { padding: 4px 8px; background: #1e272e; display: flex; flex-direction: column; justify-content: center; flex: 1; }
+        .fav-loc { font-size: 10px; color: #bdc3c7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .fav-weather { font-size: 11px; font-weight: bold; margin-top: 2px; display: flex; align-items: center; gap: 4px; }
         
-        .fav-remove { display: none; position: absolute; top: 6px; right: 6px; background: rgba(231, 76, 60, 0.9); color: white; border: none; border-radius: 3px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; z-index: 10; }
-        .fav-remove:hover { background: #c0392b; }
+        .fav-remove { display: none; position: absolute; top: 4px; right: 4px; background: rgba(231, 76, 60, 0.9); color: white; border: none; border-radius: 2px; padding: 4px 8px; font-size: 10px; font-weight: bold; cursor: pointer; z-index: 10; }
         #bottom-bar.edit-mode .fav-remove { display: block; }
         #bottom-bar.edit-mode .fav-live-tag { display: none; }
 
-        .empty-fav { color: #7f8fa6; font-size: 13px; width: 100%; text-align: center; }
+        .empty-fav { color: #7f8fa6; font-size: 12px; width: 100%; text-align: center; }
 
-        #loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(17, 17, 17, 0.85); z-index: 1000; display: none; justify-content: center; align-items: center; flex-direction: column; color: #fbc531; font-weight: bold; }
+        #loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(17, 17, 17, 0.85); z-index: 1000; display: none; justify-content: center; align-items: center; flex-direction: column; color: #fbc531; font-size: 13px; font-weight: bold; }
+        .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #fbc531; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin-bottom: 8px; }
         
-        #toast-container { position: fixed; bottom: 190px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
-        .toast { background: #2f3640; color: #fff; padding: 12px 20px; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-size: 14px; min-width: 250px; transform: translateX(120%); transition: transform 0.3s ease-out; border-left: 4px solid #3498db; }
-        .toast.show { transform: translateX(0); }
+        #toast-container { position: fixed; bottom: 180px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 10px; align-items: center; pointer-events: none; }
+        .toast { background: #2f3640; color: #fff; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-size: 13px; font-weight: bold; opacity: 0; transition: opacity 0.3s; border: 1px solid #485460; }
+        .toast.show { opacity: 1; }
+
+        @media (max-width: 768px) {
+            #content { flex-direction: column; }
+            #map-container { flex: 1.2; border-right: none; border-bottom: 1px solid #2f3640; }
+            #side-panel { flex: 1; padding: 10px; border-top: 1px solid #485460; }
+            .integrated-marker { font-size: 10px; }
+            .im-name { font-size: 11px; padding: 2px 4px; }
+            .im-weather { padding: 2px 4px; }
+        }
     </style>
 </head>
 <body>
     <div id="header">
-        <span id="current-location-text">대시보드 구동. 대상 구역을 지정하십시오.</span>
+        <span id="current-location-text">시스템 동기화 완료. 상위 구역(시/도)을 선택하십시오.</span>
         <div class="btn-group">
-            <button onclick="App.goBack()">이전 구역</button>
-            <button onclick="App.resetMap()">전국 초기화</button>
+            <button onclick="App.goBack()">이전</button>
+            <button onclick="App.resetMap()">초기화</button>
         </div>
     </div>
     
     <div id="content">
         <div id="map-container">
             <div id="map"></div>
-            <div id="loading-overlay">데이터 동기화 중...</div>
+            <div id="loading-overlay">
+                <div class="spinner"></div>
+                <span id="loading-text">동기화 중...</span>
+            </div>
         </div>
         
         <div id="side-panel">
             <div id="weather-widget">
                 <div class="widget-header">
-                    <span>거점 기상망</span>
+                    <span>거점 기상 관측망</span>
                     <span id="weather-time">-</span>
                 </div>
                 <div class="weather-main" id="weather-condition">대기</div>
                 <div class="weather-sub">
-                    <div id="weather-temp">기온: - ℃</div>
-                    <div id="weather-wind">풍속: - km/h</div>
-                    <div id="weather-status" style="margin-top: 5px; font-weight: bold;">상태: -</div>
+                    <span id="weather-temp">기온: - ℃</span> | 
+                    <span id="weather-wind">풍속: - km/h</span>
+                    <div id="weather-status" style="margin-top: 4px; font-weight: bold;">분석: -</div>
                 </div>
             </div>
 
@@ -136,22 +144,21 @@
                         <span id="video-badge" class="video-badge">대기</span>
                     </div>
                     <div class="video-controls">
-                        <button id="btn-fav-add" onclick="App.addCurrentToFavorites()">★ 채널 등록</button>
+                        <button id="btn-fav-add" onclick="App.addCurrentToFavorites()">채널 등록</button>
                     </div>
                 </div>
-                <div id="video-content" class="placeholder">마커 또는 하단 채널을 선택하십시오.</div>
+                <div id="video-content"><div class="placeholder">지도 상의 CCTV 마커(붉은 점) 또는<br>하단 채널을 선택하십시오.</div></div>
             </div>
         </div>
     </div>
 
-    <!-- CCTV 모니터 형태 즐겨찾기 패널 -->
     <div id="bottom-panel">
         <div id="bottom-header">
             <span>로컬 관측 채널 목록</span>
             <button id="btn-edit-mode" onclick="App.toggleEditMode()">편집 모드 (잠금)</button>
         </div>
         <div id="bottom-bar">
-            <div class="empty-fav">로컬 데이터를 불러오는 중...</div>
+            <div class="empty-fav">로컬 데이터 로드 중...</div>
         </div>
     </div>
 
@@ -169,40 +176,40 @@
                 MAP_TILE: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
             },
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
-            TIMEOUT: 8000,
+            TIMEOUT: 12000,
             MAJOR_CITIES: [
                 { name: '서울', lat: 37.5665, lng: 126.9780 }, { name: '부산', lat: 35.1796, lng: 129.0756 },
                 { name: '대구', lat: 35.8714, lng: 128.6014 }, { name: '인천', lat: 37.4563, lng: 126.7052 },
                 { name: '광주', lat: 35.1595, lng: 126.8526 }, { name: '대전', lat: 36.3504, lng: 127.3845 },
-                { name: '울산', lat: 35.5384, lng: 129.3114 }, { name: '세종', lat: 36.4800, lng: 127.2890 },
+                { name: '세종', lat: 36.4800, lng: 127.2890 }, { name: '제주', lat: 33.4890, lng: 126.4983 },
                 { name: '수원', lat: 37.2750, lng: 127.0094 }, { name: '춘천', lat: 37.8854, lng: 127.7298 },
                 { name: '청주', lat: 36.6356, lng: 127.4913 }, { name: '홍성', lat: 36.6013, lng: 126.6608 },
                 { name: '전주', lat: 35.8202, lng: 127.1086 }, { name: '무안', lat: 34.8161, lng: 126.4629 },
-                { name: '안동', lat: 36.5760, lng: 128.5056 }, { name: '창원', lat: 35.2383, lng: 128.6924 },
-                { name: '제주', lat: 33.4890, lng: 126.4983 }
+                { name: '안동', lat: 36.5760, lng: 128.5056 }, { name: '창원', lat: 35.2383, lng: 128.6924 }
             ]
         };
 
         const State = {
-            sidoGeoJSON: null,
-            sigunguGeoJSON: null,
-            currentWeather: null,
-            activeCCTV: null,
-            isEditMode: false
+            sidoGeoJSON: null, sigunguGeoJSON: null, currentWeather: null,
+            activeCCTV: null, isEditMode: false, syncInterval: null, currentFocusBounds: null
         };
 
         const UI = {
-            showLoading: () => { document.getElementById('loading-overlay').style.display = 'flex'; },
+            showLoading: (msg) => {
+                document.getElementById('loading-text').innerText = msg || '동기화 중';
+                document.getElementById('loading-overlay').style.display = 'flex';
+            },
             hideLoading: () => { document.getElementById('loading-overlay').style.display = 'none'; },
             showToast: (message, color = '#3498db') => {
                 const container = document.getElementById('toast-container');
                 const toast = document.createElement('div');
                 toast.className = 'toast';
-                toast.style.borderLeftColor = color;
+                toast.style.borderColor = color;
+                toast.style.color = color === '#e74c3c' ? '#ff7675' : '#fff';
                 toast.innerText = message;
                 container.appendChild(toast);
                 setTimeout(() => toast.classList.add('show'), 10);
-                setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 2500);
+                setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 2000);
             },
             updateHeader: (text) => { document.getElementById('current-location-text').innerText = text; },
             resetWeatherWidget: () => { document.getElementById('weather-widget').style.display = 'none'; }
@@ -226,27 +233,27 @@
                     const ad = data.address;
                     let result = [];
                     if (ad.city || ad.province) result.push(ad.city || ad.province);
-                    if (ad.borough || ad.county || ad.city_district) result.push(ad.borough || ad.county || ad.city_district);
-                    if (ad.suburb || ad.town || ad.village || ad.quarter) result.push(ad.suburb || ad.town || ad.village || ad.quarter);
-                    return result.join(' ') || '상세 구역 확인 불가';
+                    if (ad.borough || ad.county) result.push(ad.borough || ad.county);
+                    if (ad.town || ad.village) result.push(ad.town || ad.village);
+                    return result.join(' ') || '상세 주소 미상';
                 }
                 return '행정구역 정보 없음';
-            } catch (e) { return '역지오코딩 지연'; }
+            } catch (e) { return '지오코딩 연동 지연'; }
         }
 
         function parseWeather(code) {
             let icon = "☀️"; let text = "맑음"; let color = "#2ecc71"; let bg = "#353b48"; let rain = "정상";
-            if ([1, 2, 3].includes(code)) { icon = "☁️"; text = "구름/흐림"; }
+            if ([1, 2, 3].includes(code)) { icon = "☁️"; text = "흐림"; color = "#bdc3c7"; }
             else if ([45, 48].includes(code)) { icon = "🌫️"; text = "안개"; color = "#95a5a6"; }
-            else if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) { icon = "🌧️"; text = "강우"; color = "#e74c3c"; bg = "#4b2c2c"; rain = "강우 주의"; }
-            else if ([71, 73, 75, 77].includes(code)) { icon = "❄️"; text = "강설"; color = "#3498db"; bg = "#2c3e50"; rain = "강설 주의"; }
-            else if ([95, 96, 99].includes(code)) { icon = "⚡"; text = "낙뢰"; color = "#c0392b"; bg = "#5c2626"; rain = "위험"; }
+            else if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) { icon = "🌧️"; text = "강우"; color = "#e74c3c"; bg = "#4b2c2c"; rain = "강우 감지"; }
+            else if ([71, 73, 75, 77].includes(code)) { icon = "❄️"; text = "강설"; color = "#3498db"; bg = "#2c3e50"; rain = "강설 감지"; }
+            else if ([95, 96, 99].includes(code)) { icon = "⚡"; text = "폭우/낙뢰"; color = "#c0392b"; bg = "#5c2626"; rain = "위험 기상"; }
             return { icon, text, color, bg, rain };
         }
 
         const App = {
-            map: null, sidoLayer: null, sigunguLayer: null, clusterGroup: null, mapWeatherLayer: null,
-            hlsInstance: null, currentLevel: 0, favorites: [],
+            map: null, geoLayer: null, clusterGroup: null, infoLabelLayer: null,
+            hlsInstance: null, currentLevel: 0, favorites: [], currentFocusBounds: null,
 
             init: async function() {
                 this.initMap();
@@ -255,14 +262,16 @@
                 await this.loadSpatialData();
                 this.fetchGlobalWeather();
                 this.fetchFavoritesWeather();
-                UI.showToast('시스템 초기화 완료', '#2ecc71');
+                this.startAutoSync();
+                UI.showToast('시스템 구동 및 네트워크 연동 완료', '#2ecc71');
             },
 
             initMap: function() {
                 this.map = L.map('map', { center: [35.8, 127.5], zoom: 7, minZoom: 7, maxBounds: CONFIG.BOUNDS, maxBoundsViscosity: 1.0 });
                 L.tileLayer(CONFIG.API.MAP_TILE, { attribution: 'CartoDB' }).addTo(this.map);
-                this.mapWeatherLayer = L.layerGroup().addTo(this.map);
-                this.clusterGroup = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 50, spiderfyOnMaxZoom: true, disableClusteringAtZoom: 13 });
+                
+                this.infoLabelLayer = L.layerGroup().addTo(this.map);
+                this.clusterGroup = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 40, spiderfyOnMaxZoom: true, disableClusteringAtZoom: 13 });
                 this.map.addLayer(this.clusterGroup);
             },
 
@@ -272,46 +281,63 @@
                 }).addTo(this.map);
             },
 
-            // --- 지도 위 기상 오버레이 렌더링 ---
+            startAutoSync: function() {
+                if(State.syncInterval) clearInterval(State.syncInterval);
+                State.syncInterval = setInterval(() => {
+                    this.fetchFavoritesWeather();
+                    if(this.currentLevel === 0) this.fetchGlobalWeather();
+                    if(this.currentLevel === 2 && this.currentFocusBounds) {
+                        const center = this.currentFocusBounds.getCenter();
+                        this.fetchWeatherData(center.lat, center.lng);
+                    }
+                }, 60000);
+            },
+
             fetchGlobalWeather: async function() {
-                this.mapWeatherLayer.clearLayers();
+                this.infoLabelLayer.clearLayers();
                 const promises = CONFIG.MAJOR_CITIES.map(async city => {
                     const res = await fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${city.lat}&longitude=${city.lng}&current_weather=true&timezone=Asia%2FSeoul`);
                     const data = await res.json();
-                    return { lat: city.lat, lng: city.lng, weather: data.current_weather };
+                    return { name: city.name, lat: city.lat, lng: city.lng, weather: data.current_weather };
                 });
                 const results = await Promise.allSettled(promises);
-                this.renderWeatherMarkers(results);
+                this.renderIntegratedMarkers(results);
             },
 
             fetchLocalWeather: async function(geoJsonLayer) {
-                this.mapWeatherLayer.clearLayers();
+                this.infoLabelLayer.clearLayers();
                 const promises = [];
                 geoJsonLayer.eachLayer(layer => {
                     const center = layer.getBounds().getCenter();
+                    const name = layer.feature.properties.name;
                     promises.push(
                         fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${center.lat}&longitude=${center.lng}&current_weather=true&timezone=Asia%2FSeoul`)
                         .then(res => res.json())
-                        .then(data => ({ lat: center.lat, lng: center.lng, weather: data.current_weather }))
+                        .then(data => ({ name: name, lat: center.lat, lng: center.lng, weather: data.current_weather }))
                     );
                 });
                 const results = await Promise.allSettled(promises);
-                this.renderWeatherMarkers(results);
+                this.renderIntegratedMarkers(results);
             },
 
-            renderWeatherMarkers: function(resultsSettled) {
+            renderIntegratedMarkers: function(resultsSettled) {
                 resultsSettled.forEach(res => {
                     if(res.status === 'fulfilled') {
                         const w = res.value.weather;
                         const p = parseWeather(w.weathercode);
-                        const html = `<div class="map-weather-marker" style="border-color:${p.color}">${p.icon} ${w.temperature}℃</div>`;
-                        const icon = L.divIcon({ html: html, className: '', iconSize: [70, 24], iconAnchor: [35, 12] });
-                        L.marker([res.value.lat, res.value.lng], { icon: icon, interactive: false }).addTo(this.mapWeatherLayer);
+                        
+                        const html = `
+                            <div class="integrated-marker" style="border-color:${p.color}">
+                                <div class="im-name">${res.value.name}</div>
+                                <div class="im-weather"><span style="font-size:14px;">${p.icon}</span> ${w.temperature}℃</div>
+                            </div>
+                        `;
+                        const icon = L.divIcon({ html: html, className: 'leaflet-div-icon-custom', iconSize: null });
+                        L.marker([res.value.lat, res.value.lng], { icon: icon, interactive: false }).addTo(this.infoLabelLayer);
                     }
                 });
             },
 
-            // --- 편집 및 즐겨찾기 ---
             toggleEditMode: function() {
                 State.isEditMode = !State.isEditMode;
                 const btn = document.getElementById('btn-edit-mode');
@@ -319,9 +345,9 @@
                 const bar = document.getElementById('bottom-bar');
 
                 if (State.isEditMode) {
-                    btn.innerText = '편집 완료 (해제)'; btn.classList.add('active'); bar.classList.add('edit-mode');
+                    btn.innerText = '편집 완료'; btn.classList.add('active'); bar.classList.add('edit-mode');
                     if (State.activeCCTV) addBtn.style.display = 'inline-block';
-                    UI.showToast('편집 모드 가동: 항목 삭제 및 등록 허용', '#f39c12');
+                    UI.showToast('항목 삭제 및 등록 허용됨', '#f1c40f');
                 } else {
                     btn.innerText = '편집 모드 (잠금)'; btn.classList.remove('active'); bar.classList.remove('edit-mode');
                     addBtn.style.display = 'none';
@@ -329,30 +355,29 @@
             },
 
             loadFavorites: function() {
-                const stored = localStorage.getItem('cctv_fav_v4');
+                const stored = localStorage.getItem('cctv_fav_v6');
                 if (stored) { this.favorites = JSON.parse(stored); } 
                 else {
-                    this.favorites = [
-                        { id: 'f1', name: '양양(양양IC)', lat: 38.064, lng: 128.599, address: '강원도 양양군 서면', url: '' },
-                        { id: 'f2', name: '서울(양재)', lat: 37.464, lng: 127.033, address: '서울특별시 서초구 양재동', url: '' }
-                    ];
+                    this.favorites = [ { id: 'f1', name: '양양(양양IC)', lat: 38.064, lng: 128.599, address: '강원도 양양군 서면', url: '' } ];
                     this.saveFavorites();
                 }
                 this.renderFavoritesUI();
             },
 
-            saveFavorites: function() { localStorage.setItem('cctv_fav_v4', JSON.stringify(this.favorites)); },
+            saveFavorites: function() { localStorage.setItem('cctv_fav_v6', JSON.stringify(this.favorites)); },
 
             addCurrentToFavorites: async function() {
                 if (!State.isEditMode || !State.activeCCTV) return;
                 const cctv = State.activeCCTV;
-                if (this.favorites.find(f => f.name === cctv.name)) { UI.showToast('기등록된 채널입니다.', '#e74c3c'); return; }
+                if (this.favorites.find(f => f.name === cctv.name)) { UI.showToast('기등록 데이터', '#e74c3c'); return; }
 
-                UI.showLoading();
+                UI.showLoading('좌표 변환');
                 const address = await getAddressFromCoords(cctv.lat, cctv.lng);
+                
                 this.favorites.unshift({ id: 'fav_' + Date.now(), name: cctv.name, lat: cctv.lat, lng: cctv.lng, url: cctv.url, address: address });
                 this.saveFavorites(); this.renderFavoritesUI(); this.fetchFavoritesWeather();
-                UI.hideLoading(); UI.showToast('채널 등록 완료', '#2ecc71');
+                
+                UI.hideLoading(); UI.showToast('로컬 채널 저장 완료', '#2ecc71');
             },
 
             removeFavorite: function(id, event) {
@@ -381,7 +406,9 @@
                         </div>
                         <div class="fav-details">
                             <div class="fav-loc" title="${fav.address}">${fav.address}</div>
-                            <div class="fav-weather" id="fav-w-${fav.id}">-℃</div>
+                            <div class="fav-weather" id="fav-w-${fav.id}">
+                                <span style="color:#7f8fa6">동기화 대기</span>
+                            </div>
                         </div>
                     `;
                     bar.appendChild(card);
@@ -391,83 +418,82 @@
             fetchFavoritesWeather: async function() {
                 this.favorites.forEach(async (fav) => {
                     try {
-                        const res = await fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${fav.lat}&longitude=${fav.lng}&current_weather=true&timezone=Asia%2FSeoul`);
+                        const res = await fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${fav.lat}&longitude=${fav.lng}&current_weather=true&timezone=Asia%2FSeoul`, { timeout: 4000 });
                         const data = await res.json();
-                        const parsed = parseWeather(data.current_weather.weathercode);
+                        const p = parseWeather(data.current_weather.weathercode);
                         const el = document.getElementById(`fav-w-${fav.id}`);
-                        if(el) { el.innerHTML = `<span style="color:${parsed.color}">${parsed.icon}</span> ${data.current_weather.temperature}℃`; }
+                        if(el) { el.innerHTML = `<span style="color:${p.color}">${p.icon}</span> ${data.current_weather.temperature}℃`; }
                     } catch(e) {}
                 });
             },
 
-            // --- 공간 데이터 렌더링 ---
             loadSpatialData: async function() {
-                UI.showLoading();
+                UI.showLoading('공간 데이터 통신');
                 try {
                     const [sidoRes, sigunguRes] = await Promise.all([ fetchWithTimeout(CONFIG.API.SIDO_GEOJSON), fetchWithTimeout(CONFIG.API.SIGUNGU_GEOJSON) ]);
                     State.sidoGeoJSON = await sidoRes.json(); State.sigunguGeoJSON = await sigunguRes.json();
-                    this.renderSidoLayer();
-                } catch (e) { UI.showToast('공간 연동 실패', '#e74c3c'); } finally { UI.hideLoading(); }
+                    this.renderGeoLayer(State.sidoGeoJSON, 1);
+                } catch (e) { UI.showToast('공간 통신 오류', '#e74c3c'); } finally { UI.hideLoading(); }
             },
 
-            renderSidoLayer: function() {
-                if(this.sidoLayer) this.map.removeLayer(this.sidoLayer);
-                this.sidoLayer = L.geoJSON(State.sidoGeoJSON, {
-                    style: { color: '#2980b9', weight: 2, fillOpacity: 0.05 },
-                    onEachFeature: (feature, layer) => {
-                        layer.bindTooltip(feature.properties.name, { permanent: true, direction: "center", className: "region-label" });
-                        layer.on('click', () => this.handleSidoClick(feature, layer));
-                    }
-                }).addTo(this.map);
-            },
-
-            handleSidoClick: async function(feature, layer) {
-                const code = feature.properties.code;
-                this.currentLevel = 1;
-                UI.updateHeader(`[${feature.properties.name}] 하위 구역 확인`);
-                UI.resetWeatherWidget();
-                this.map.removeLayer(this.sidoLayer);
-                this.map.fitBounds(layer.getBounds());
-
-                const filtered = { ...State.sigunguGeoJSON, features: State.sigunguGeoJSON.features.filter(f => f.properties.code.startsWith(code)) };
-                this.sigunguLayer = L.geoJSON(filtered, {
-                    style: { color: '#8e44ad', weight: 1, fillOpacity: 0.1 },
-                    onEachFeature: (feature, subLayer) => {
-                        subLayer.bindTooltip(feature.properties.name, { permanent: true, direction: "center", className: "region-label" });
-                        subLayer.on('click', (e) => this.handleSigunguClick(feature.properties.name, subLayer.getBounds(), e.latlng));
-                    }
-                }).addTo(this.map);
+            renderGeoLayer: function(geoJsonData, targetLevel) {
+                if(this.geoLayer) this.map.removeLayer(this.geoLayer);
                 
-                this.fetchLocalWeather(this.sigunguLayer);
-                await this.fetchActualCCTVData(layer.getBounds(), true);
+                this.geoLayer = L.geoJSON(geoJsonData, {
+                    style: { color: targetLevel === 1 ? '#2980b9' : '#8e44ad', weight: targetLevel === 1 ? 2 : 1, fillOpacity: 0.05 },
+                    onEachFeature: (feature, layer) => {
+                        layer.on('click', () => {
+                            if(targetLevel === 1) this.handleSidoClick(feature.properties.code, feature.properties.name, layer.getBounds());
+                            else this.handleSigunguClick(feature.properties.name, layer.getBounds());
+                        });
+                    }
+                }).addTo(this.map);
             },
 
-            handleSigunguClick: function(name, bounds, latlng) {
-                this.currentLevel = 2; this.map.fitBounds(bounds);
+            handleSidoClick: async function(sidoCode, name, bounds) {
+                this.currentLevel = 1;
+                UI.updateHeader(`[${name}] 하위 구역 확인`);
+                UI.resetWeatherWidget();
+                this.map.fitBounds(bounds);
+
+                const filtered = { ...State.sigunguGeoJSON, features: State.sigunguGeoJSON.features.filter(f => f.properties.code.startsWith(sidoCode)) };
+                this.renderGeoLayer(filtered, 2);
+                this.fetchLocalWeather(this.geoLayer);
+            },
+
+            handleSigunguClick: function(name, bounds) {
+                this.currentLevel = 2;
+                this.currentFocusBounds = bounds;
+                this.map.fitBounds(bounds);
                 UI.updateHeader(`대상: ${name}`);
-                this.fetchWeatherData(latlng.lat, latlng.lng);
+                
+                const center = bounds.getCenter();
+                this.fetchWeatherData(center.lat, center.lng);
+                this.fetchActualCCTVData(bounds, false);
             },
 
             executeDirectSearch: function(name, lat, lng, autoPlay = false, forceUrl = '') {
                 if(State.isEditMode) return;
                 this.currentLevel = 2;
                 const bounds = L.latLngBounds([lat - 0.02, lng - 0.02], [lat + 0.02, lng + 0.02]);
+                
                 this.map.fitBounds(bounds);
+                this.currentFocusBounds = bounds;
                 UI.updateHeader(`관측: ${name}`);
                 
-                if(this.sidoLayer) this.map.removeLayer(this.sidoLayer);
-                if(this.sigunguLayer) this.map.removeLayer(this.sigunguLayer);
+                if(this.geoLayer) this.map.removeLayer(this.geoLayer);
                 
                 this.fetchWeatherData(lat, lng);
-                this.mapWeatherLayer.clearLayers();
+                this.infoLabelLayer.clearLayers();
                 
                 if (autoPlay && forceUrl) {
                     this.clearCCTVResources();
-                    this.renderMarkers(lat, lng, name, forceUrl);
+                    this.renderCCTVDots([{ cctvname: name, coordy: lat, coordx: lng, cctvurl: forceUrl }]);
                     document.getElementById('video-title').innerText = `[송출] ${name}`;
                     this.playCCTVStream(forceUrl, { name, lat, lng, url: forceUrl });
-                    this.fetchActualCCTVData(bounds, true, 1, false);
-                } else { this.fetchActualCCTVData(bounds, false, 1, autoPlay); }
+                } else { 
+                    this.fetchActualCCTVData(bounds, false, 1, autoPlay); 
+                }
             },
 
             fetchWeatherData: async function(lat, lon) {
@@ -482,23 +508,23 @@
                     const p = parseWeather(data.current_weather.weathercode);
 
                     widget.style.backgroundColor = p.bg;
-                    document.getElementById('weather-time').innerText = `시각: ${now.getHours()}:${now.getMinutes().toString().padStart(2,'0')}`;
-                    document.getElementById('weather-condition').innerText = `${p.icon} ${p.text}`;
+                    document.getElementById('weather-time').innerText = `시각: ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+                    document.getElementById('weather-condition').innerHTML = `${p.icon} <span style="color:${p.color}">${p.text}</span>`;
                     document.getElementById('weather-temp').innerText = `온도: ${data.current_weather.temperature}℃`;
                     document.getElementById('weather-wind').innerText = `풍속: ${data.current_weather.windspeed} km/h`;
                     document.getElementById('weather-status').innerText = `분석: ${p.rain}`;
                     document.getElementById('weather-status').style.color = p.color;
-                } catch (e) {}
+                } catch (e) { UI.showToast('기상 수신 실패', '#e74c3c'); }
             },
 
             fetchActualCCTVData: async function(bounds, isBroadSearch = false, attempt = 1, autoPlay = false) {
                 if(!isBroadSearch) this.clearCCTVResources();
-                if(!isBroadSearch) UI.showLoading();
+                if(!isBroadSearch) UI.showLoading('인프라망 연동');
 
                 const q = `?apiKey=${CONFIG.API.ITS_KEY}&type=all&cctvType=1&minX=${bounds.getWest().toFixed(5)}&maxX=${bounds.getEast().toFixed(5)}&minY=${bounds.getSouth().toFixed(5)}&maxY=${bounds.getNorth().toFixed(5)}&getType=json`;
-                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(CONFIG.API.ITS_BASE + q)}`;
-
+                
                 try {
+                    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(CONFIG.API.ITS_BASE + q)}`;
                     const res = await fetchWithTimeout(proxyUrl);
                     let apiData;
                     try { apiData = await res.json(); } 
@@ -511,29 +537,35 @@
 
                     if (!apiData.response || apiData.response.datacount === 0) {
                         if (attempt === 1 && !isBroadSearch) return this.fetchActualCCTVData(bounds.pad(0.5), false, 2, autoPlay);
+                        if(!isBroadSearch) UI.showToast('해당 구역 내 가용 CCTV 없음', '#e74c3c');
                         return;
                     }
                     
-                    const markers = [];
-                    const dotIcon = L.divIcon({ className: 'cctv-dot', iconSize: [12, 12] });
+                    this.renderCCTVDots(apiData.response.data, autoPlay);
 
-                    apiData.response.data.forEach((cctv, i) => {
-                        const marker = L.marker([cctv.coordy, cctv.coordx], { icon: dotIcon });
-                        marker.bindPopup(`<b>[CCTV] ${cctv.cctvname}</b>`);
-                        marker.on('click', () => {
-                            document.getElementById('video-title').innerText = `[송출] ${cctv.cctvname}`;
-                            this.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
-                        });
-                        markers.push(marker);
-
-                        if (autoPlay && i === 0) {
-                            document.getElementById('video-title').innerText = `[송출] ${cctv.cctvname}`;
-                            this.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
-                        }
-                    });
-                    this.clusterGroup.addLayers(markers);
-                } catch (error) {} 
+                } catch (error) { if(!isBroadSearch) UI.showToast('네트워크 연동 지연', '#e74c3c'); } 
                 finally { UI.hideLoading(); }
+            },
+
+            renderCCTVDots: function(cctvArray, autoPlay = false) {
+                const markers = [];
+                const dotIcon = L.divIcon({ className: 'cctv-dot', iconSize: [14, 14] });
+
+                cctvArray.forEach((cctv, i) => {
+                    const marker = L.marker([cctv.coordy, cctv.coordx], { icon: dotIcon });
+                    marker.bindPopup(`<b>[CCTV] ${cctv.cctvname}</b>`);
+                    marker.on('click', () => {
+                        document.getElementById('video-title').innerText = `[송출] ${cctv.cctvname}`;
+                        this.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
+                    });
+                    markers.push(marker);
+
+                    if (autoPlay && i === 0) {
+                        document.getElementById('video-title').innerText = `[송출] ${cctv.cctvname}`;
+                        this.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
+                    }
+                });
+                this.clusterGroup.addLayers(markers);
             },
 
             playCCTVStream: function(streamUrl, cctvObj) {
@@ -556,6 +588,9 @@
                     this.hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
                         video.play(); badge.innerText = "LIVE"; badge.className = "video-badge active";
                     });
+                    this.hlsInstance.on(Hls.Events.ERROR, () => {
+                        badge.innerText = "ERROR"; UI.showToast('수신 실패: 스트림 불안정', '#e74c3c');
+                    });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = streamUrl;
                     video.addEventListener('loadedmetadata', () => {
@@ -572,7 +607,7 @@
                 if (badge) { badge.innerText = "대기"; badge.className = "video-badge"; }
                 
                 const wrapper = document.getElementById('video-content');
-                if(wrapper) wrapper.innerHTML = '마커 또는 하단 채널을 선택하십시오.';
+                if(wrapper) wrapper.innerHTML = '<div class="placeholder">마커 또는 채널 선택</div>';
                 
                 State.activeCCTV = null;
                 document.getElementById('btn-fav-add').style.display = 'none';
@@ -581,17 +616,16 @@
             goBack: function() {
                 this.clearCCTVResources();
                 UI.resetWeatherWidget();
+                this.currentFocusBounds = null;
 
                 if (this.currentLevel === 2) {
                     this.currentLevel = 1;
-                    UI.updateHeader('상위 구역 복귀');
+                    UI.updateHeader('상위 구역');
                     this.map.setZoom(8);
-                    if(this.sigunguLayer) this.fetchActualCCTVData(this.sigunguLayer.getBounds(), true);
                 } else if (this.currentLevel === 1) {
                     this.currentLevel = 0;
                     UI.updateHeader('대상 구역을 지정하십시오.');
-                    if (this.sigunguLayer) this.map.removeLayer(this.sigunguLayer);
-                    this.renderSidoLayer();
+                    this.renderGeoLayer(State.sidoGeoJSON, 1);
                     this.fetchGlobalWeather();
                     this.map.setView([35.8, 127.5], 7);
                 }
@@ -604,3 +638,5 @@
     </script>
 </body>
 </html>
+
+
