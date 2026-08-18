@@ -166,18 +166,7 @@
     <script>
         const CONFIG = {
             API: {
-                ITS_KEY: '70de7a2cb4cc411d8de01825666b6e80',
-                ITS_ENDPOINTS: [
-                    'https://openapi.its.go.kr/cctvInfo',
-                    'https://openapi.its.go.kr:9443/cctvInfo',
-                    'http://openapi.its.go.kr/cctvInfo'
-                ],
-                PROXIES: [
-                    (url) => url,
-                    (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-                    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-                    (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
-                ],
+                CCTV_PROXY: '/api/cctv',
                 SIDO_GEOJSON: 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_provinces_geo_simple.json',
                 SIGUNGU_GEOJSON: 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_municipalities_geo_simple.json',
                 WEATHER: 'https://api.open-meteo.com/v1/forecast',
@@ -238,7 +227,6 @@
             if (!rawContent) return [];
             let list = [];
 
-            // JSON 파싱 시도
             try {
                 const json = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
                 if (json?.response?.data) {
@@ -247,7 +235,6 @@
                     list = json;
                 }
             } catch (e) {
-                // XML Fallback
                 try {
                     const parser = new DOMParser();
                     const xml = parser.parseFromString(rawContent, 'text/xml');
@@ -568,7 +555,7 @@
                 } catch (e) { UI.showToast('기상 수신 실패', '#e74c3c'); }
             },
 
-            // 다중 엔드포인트 및 다중 프록시 폴백 CCTV 요청 로직
+            // Vercel Serverless 프록시(/api/cctv) 전용 비동기 요청
             fetchActualCCTVData: async function(bounds, isBroadSearch = false, attempt = 1, autoPlay = false) {
                 if(!isBroadSearch) this.clearCCTVResources();
                 if(!isBroadSearch) UI.showLoading('인프라 좌표 렌더링');
@@ -578,42 +565,17 @@
                 const minY = bounds.getSouth().toFixed(5);
                 const maxY = bounds.getNorth().toFixed(5);
 
-                const queryParam = `?apiKey=${CONFIG.API.ITS_KEY}&type=all&cctvType=1&minX=${minX}&maxX=${maxX}&minY=${minY}&maxY=${maxY}&getType=json`;
-                
+                const endpoint = `${CONFIG.API.CCTV_PROXY}?minX=${minX}&maxX=${maxX}&minY=${minY}&maxY=${maxY}&type=all&cctvType=1`;
                 let cctvDataArray = [];
 
-                // 엔드포인트 및 프록시 매트릭스 순차 호출
-                for (const base of CONFIG.API.ITS_ENDPOINTS) {
-                    const fullTargetUrl = `${base}${queryParam}`;
-                    
-                    for (const proxyBuilder of CONFIG.API.PROXIES) {
-                        const targetUrl = proxyBuilder(fullTargetUrl);
-                        const isAllOriginsGet = targetUrl.includes('api.allorigins.win/get');
-
-                        try {
-                            const res = await fetchWithTimeout(targetUrl, { timeout: 3500 });
-                            if (!res.ok) continue;
-
-                            let rawText = await res.text();
-                            if (isAllOriginsGet) {
-                                try {
-                                    const jsonWrap = JSON.parse(rawText);
-                                    rawText = jsonWrap.contents;
-                                } catch { continue; }
-                            }
-
-                            // 프록시 에러 HTML 조기 차단
-                            if (typeof rawText === 'string' && (rawText.trim().startsWith('<!DOCTYPE') || rawText.trim().startsWith('<html'))) {
-                                continue;
-                            }
-
-                            cctvDataArray = safeParseITSData(rawText);
-                            if (cctvDataArray && cctvDataArray.length > 0) break;
-                        } catch (err) {
-                            // 다음 프록시 시도
-                        }
+                try {
+                    const res = await fetchWithTimeout(endpoint, { timeout: 6000 });
+                    if (res.ok) {
+                        const rawText = await res.text();
+                        cctvDataArray = safeParseITSData(rawText);
                     }
-                    if (cctvDataArray && cctvDataArray.length > 0) break;
+                } catch (err) {
+                    console.error('Proxy Fetch Error:', err);
                 }
 
                 UI.hideLoading();
