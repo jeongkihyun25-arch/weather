@@ -16,99 +16,403 @@
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     
     <style>
-        * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100dvh; font-family: 'Malgun Gothic', sans-serif; background: #1e272e; color: #dcdde1; overflow: hidden; }
-        
-        #header { flex: 0 0 55px; padding: 0 15px; background: #111; color: #fff; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.5); z-index: 10; border-bottom: 1px solid #2f3640; }
-        #current-location-text { font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw; }
-        .btn-group { display: flex; gap: 8px; flex-shrink: 0; }
-        .btn-group button { padding: 6px 12px; background: #2f3640; color: #fff; border: 1px solid #485460; cursor: pointer; border-radius: 4px; font-size: 12px; font-weight: bold; transition: background 0.2s; }
-        .btn-group button:active { background: #485460; }
-        
-        #content { display: flex; flex: 1; flex-direction: row; min-height: 0; }
-        
-        #map-container { flex: 2; position: relative; border-right: 1px solid #2f3640; display: flex; flex-direction: column; min-height: 0; }
-        #map { flex: 1; width: 100%; background: #c8d6e5; }
-        
-        #side-panel { flex: 1; background: #1e272e; display: flex; flex-direction: column; padding: 12px; overflow-y: auto; min-width: 300px; gap: 12px; }
-        
-        #weather-widget { flex: 0 0 auto; background: #2f3640; padding: 12px; border-radius: 6px; border: 1px solid #485460; display: none; transition: background 0.3s ease; }
-        .widget-header { font-size: 11px; color: #7f8fa6; margin-bottom: 8px; border-bottom: 1px solid #485460; padding-bottom: 4px; display: flex; justify-content: space-between; }
-        .weather-main { font-size: 18px; font-weight: bold; color: #fbc531; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
-        .weather-sub { font-size: 12px; color: #dcdde1; line-height: 1.4; }
-        
-        #video-wrapper { background: #000; flex: 1; border-radius: 6px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #485460; min-height: 200px; position: relative; }
-        #video-header { flex: 0 0 auto; padding: 8px 12px; background: #111; color: #fff; font-size: 13px; font-weight: bold; border-bottom: 1px solid #2f3640; display: flex; justify-content: space-between; align-items: center; }
-        #video-content { flex: 1; display: flex; position: relative; }
-        .placeholder { color: #7f8fa6; margin: auto; font-size: 13px; text-align: center; padding: 15px; }
-        video { width: 100%; height: 100%; object-fit: contain; background: #000; position: absolute; top:0; left:0; }
-        
-        .video-controls { display: flex; gap: 8px; align-items: center; }
-        #btn-fav-add { padding: 4px 8px; background: #2ecc71; color: #111; border: none; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: bold; display: none; }
-        
-        .video-badge { font-size: 10px; padding: 2px 4px; border-radius: 3px; background: #7f8fa6; color: #fff; margin-left: 6px; }
-        .video-badge.active { background: #e74c3c; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        :root {
+            --bg: #0f1419;
+            --panel: #1a2332;
+            --card: #243044;
+            --border: #2d3a4f;
+            --text: #e8eef7;
+            --muted: #8b9cb3;
+            --accent: #3b82f6;
+            --accent2: #f59e0b;
+            --danger: #ef4444;
+            --success: #22c55e;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            height: 100dvh;
+            font-family: 'Malgun Gothic', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #header {
+            flex: 0 0 56px;
+            padding: 0 16px;
+            background: rgba(15,20,25,0.95);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 20;
+        }
+        #current-location-text {
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 58vw;
+        }
+        .btn-group { display: flex; gap: 8px; }
+        .btn-group button {
+            padding: 7px 14px;
+            background: var(--card);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-group button:active { background: var(--border); }
 
-        /* 통합 마커 (지역명 + 기상 결합, 클릭 간섭 완벽 차단) */
+        #content { display: flex; flex: 1; min-height: 0; }
+        #map-container {
+            flex: 2;
+            position: relative;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+        #map { flex: 1; width: 100%; background: #1e293b; }
+
+        #side-panel {
+            flex: 1;
+            background: var(--panel);
+            display: flex;
+            flex-direction: column;
+            padding: 14px;
+            gap: 12px;
+            overflow-y: auto;
+            min-width: 300px;
+        }
+
+        #weather-widget {
+            display: none;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+        }
+        .widget-header {
+            font-size: 11px;
+            color: var(--muted);
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border);
+        }
+        .weather-main {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--accent2);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .weather-sub { font-size: 13px; line-height: 1.5; }
+
+        #video-wrapper {
+            flex: 1;
+            background: #000;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 200px;
+        }
+        #video-header {
+            padding: 10px 14px;
+            background: #111;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        #video-content { flex: 1; position: relative; display: flex; }
+        .placeholder {
+            color: var(--muted);
+            margin: auto;
+            font-size: 13px;
+            text-align: center;
+            padding: 16px;
+            line-height: 1.5;
+        }
+        video { width: 100%; height: 100%; object-fit: contain; position: absolute; inset: 0; }
+
+        #btn-fav-add {
+            padding: 5px 10px;
+            background: var(--success);
+            color: #111;
+            border: none;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            display: none;
+        }
+        .video-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: var(--muted);
+            color: #fff;
+            margin-left: 6px;
+        }
+        .video-badge.active {
+            background: var(--danger);
+            animation: pulse 1.8s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.55; }
+        }
+
         .leaflet-div-icon-custom { background: transparent; border: none; pointer-events: none !important; }
-        .integrated-marker { background: rgba(30, 39, 46, 0.95); color: #fff; border: 1px solid #7f8fa6; border-radius: 6px; font-size: 12px; text-align: center; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: translate(-50%, -50%); pointer-events: none; }
-        .im-name { font-weight: 900; background: rgba(0, 0, 0, 0.4); padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.2); pointer-events: none; }
-        .im-weather { padding: 4px 8px; font-weight: bold; display: flex; align-items: center; gap: 6px; justify-content: center; pointer-events: none; }
-        
-        .cctv-dot { display: block; width: 14px; height: 14px; background-color: #e74c3c; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.6); cursor: pointer; }
+        .integrated-marker {
+            background: rgba(26,35,50,0.92);
+            color: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            overflow: hidden;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .im-name {
+            font-weight: 800;
+            background: rgba(0,0,0,0.35);
+            padding: 5px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .im-weather {
+            padding: 5px 10px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            justify-content: center;
+        }
+        .cctv-dot {
+            width: 14px; height: 14px;
+            background: var(--danger);
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+            cursor: pointer;
+        }
 
-        #bottom-panel { flex: 0 0 160px; background: #111; border-top: 2px solid #2f3640; display: flex; flex-direction: column; width: 100%; overflow: hidden; }
-        #bottom-header { flex: 0 0 32px; padding: 0 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2f3640; background: #1e272e; }
-        #bottom-header span { color: #fbc531; font-size: 12px; font-weight: bold; }
-        
-        #btn-edit-mode { padding: 4px 10px; background: #485460; color: #fff; border: 1px solid #7f8fa6; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: bold; }
-        #btn-edit-mode.active { background: #c0392b; border-color: #e74c3c; }
-
-        #bottom-bar { display: flex; align-items: center; padding: 10px 15px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; gap: 12px; flex: 1; -webkit-overflow-scrolling: touch; }
-        #bottom-bar::-webkit-scrollbar { height: 6px; }
-        #bottom-bar::-webkit-scrollbar-track { background: #111; }
-        #bottom-bar::-webkit-scrollbar-thumb { background: #485460; border-radius: 3px; }
-        
-        .fav-card { flex: 0 0 160px; background: #2f3640; border: 1px solid #485460; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; cursor: pointer; position: relative; height: 95px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: border-color 0.2s; }
-        .fav-card:active { border-color: #2ecc71; }
-        
-        .fav-screen { height: 50px; background: #000; position: relative; display: flex; justify-content: center; align-items: center; border-bottom: 1px solid #1e272e; }
-        .fav-play-icon { font-size: 18px; color: rgba(255,255,255,0.6); }
-        .fav-live-tag { position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.7); color: #e74c3c; font-size: 9px; font-weight: bold; padding: 1px 3px; border-radius: 2px; border: 1px solid #e74c3c; }
-        .fav-name-tag { position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,0.7); color: #fff; font-size: 10px; padding: 1px 4px; border-radius: 2px; }
-        
-        .fav-details { padding: 4px 8px; background: #1e272e; display: flex; flex-direction: column; justify-content: center; flex: 1; }
-        .fav-loc { font-size: 10px; color: #bdc3c7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .fav-weather { font-size: 11px; font-weight: bold; margin-top: 2px; display: flex; align-items: center; gap: 4px; }
-        
-        .fav-remove { display: none; position: absolute; top: 4px; right: 4px; background: rgba(231, 76, 60, 0.9); color: white; border: none; border-radius: 2px; padding: 4px 8px; font-size: 10px; font-weight: bold; cursor: pointer; z-index: 10; }
+        #bottom-panel {
+            flex: 0 0 158px;
+            background: #0c1017;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+        #bottom-header {
+            height: 34px;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+        }
+        #bottom-header span {
+            color: var(--accent2);
+            font-size: 12px;
+            font-weight: 700;
+        }
+        #btn-edit-mode {
+            padding: 4px 12px;
+            background: var(--card);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        #btn-edit-mode.active {
+            background: #7f1d1d;
+            border-color: var(--danger);
+        }
+        #bottom-bar {
+            display: flex;
+            align-items: center;
+            padding: 10px 14px;
+            overflow-x: auto;
+            gap: 12px;
+            flex: 1;
+            -webkit-overflow-scrolling: touch;
+        }
+        .fav-card {
+            flex: 0 0 158px;
+            height: 96px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+            position: relative;
+        }
+        .fav-card:active { border-color: var(--success); }
+        .fav-screen {
+            height: 52px;
+            background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .fav-play-icon { font-size: 18px; color: rgba(255,255,255,0.5); }
+        .fav-live-tag {
+            position: absolute; top: 5px; left: 5px;
+            background: rgba(0,0,0,0.75);
+            color: var(--danger);
+            font-size: 9px;
+            font-weight: 700;
+            padding: 2px 5px;
+            border-radius: 3px;
+            border: 1px solid var(--danger);
+        }
+        .fav-name-tag {
+            position: absolute; bottom: 5px; right: 5px;
+            background: rgba(0,0,0,0.75);
+            color: #fff;
+            font-size: 10px;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .fav-details {
+            padding: 5px 8px;
+            background: var(--panel);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .fav-loc {
+            font-size: 10px;
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .fav-weather {
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 2px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .fav-remove {
+            display: none;
+            position: absolute;
+            top: 5px; right: 5px;
+            background: rgba(239,68,68,0.9);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 3px 7px;
+            font-size: 10px;
+            font-weight: 700;
+            z-index: 5;
+            cursor: pointer;
+        }
         #bottom-bar.edit-mode .fav-remove { display: block; }
         #bottom-bar.edit-mode .fav-live-tag { display: none; }
+        .empty-fav {
+            color: var(--muted);
+            font-size: 12px;
+            width: 100%;
+            text-align: center;
+        }
 
-        .empty-fav { color: #7f8fa6; font-size: 12px; width: 100%; text-align: center; }
+        #loading-overlay {
+            position: absolute; inset: 0;
+            background: rgba(15,20,25,0.82);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: var(--accent2);
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .spinner {
+            width: 28px; height: 28px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--accent2);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* 로딩 오버레이 및 알림 토스트 */
-        #loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(17, 17, 17, 0.85); z-index: 1000; display: none; justify-content: center; align-items: center; flex-direction: column; color: #fbc531; font-size: 13px; font-weight: bold; }
-        .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #fbc531; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin-bottom: 8px; }
-        
-        #toast-container { position: fixed; bottom: 180px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 10px; align-items: center; pointer-events: none; }
-        .toast { background: #2f3640; color: #fff; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-size: 13px; font-weight: bold; opacity: 0; transition: opacity 0.3s; border: 1px solid #485460; }
+        #toast-container {
+            position: fixed;
+            bottom: 175px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+        .toast {
+            background: var(--card);
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+            opacity: 0;
+            transition: opacity 0.25s;
+        }
         .toast.show { opacity: 1; }
+
+        .leaflet-control-geocoder {
+            border-radius: 10px !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.35) !important;
+            border: 1px solid var(--border) !important;
+            overflow: hidden;
+        }
+        .leaflet-control-geocoder-form input {
+            background: var(--card) !important;
+            color: var(--text) !important;
+            border: none !important;
+            padding: 8px 12px !important;
+            font-size: 13px !important;
+        }
 
         @media (max-width: 768px) {
             #content { flex-direction: column; }
-            #map-container { flex: 1.2; border-right: none; border-bottom: 1px solid #2f3640; }
-            #side-panel { flex: 1; padding: 10px; border-top: 1px solid #485460; }
-            .integrated-marker { font-size: 10px; }
-            .im-name { font-size: 11px; padding: 2px 4px; }
-            .im-weather { padding: 2px 4px; }
+            #map-container { flex: 1.25; border-right: none; border-bottom: 1px solid var(--border); }
+            #side-panel { flex: 1; min-width: 0; padding: 10px; }
         }
     </style>
 </head>
 <body>
     <div id="header">
-        <span id="current-location-text">시스템 동기화 완료. 관측 대상 시/도를 선택하십시오.</span>
+        <span id="current-location-text">시스템 동기화 완료 · 관측 대상 시/도를 선택하세요</span>
         <div class="btn-group">
             <button onclick="App.goBack()">이전</button>
             <button onclick="App.resetMap()">초기화</button>
@@ -134,7 +438,7 @@
                 <div class="weather-sub">
                     <span id="weather-temp">기온: - ℃</span> | 
                     <span id="weather-wind">풍속: - km/h</span>
-                    <div id="weather-status" style="margin-top: 4px; font-weight: bold;">분석: -</div>
+                    <div id="weather-status" style="margin-top:4px;font-weight:600;">분석: -</div>
                 </div>
             </div>
 
@@ -144,11 +448,13 @@
                         <span id="video-title">스트리밍 뷰어</span>
                         <span id="video-badge" class="video-badge">대기</span>
                     </div>
-                    <div class="video-controls">
+                    <div>
                         <button id="btn-fav-add" onclick="App.addCurrentToFavorites()">채널 등록</button>
                     </div>
                 </div>
-                <div id="video-content"><div class="placeholder">지도 상의 인프라 마커(붉은 점) 또는<br>하단 채널을 선택하십시오.</div></div>
+                <div id="video-content">
+                    <div class="placeholder">지도 상의 인프라 마커(붉은 점) 또는<br>하단 채널을 선택하세요</div>
+                </div>
             </div>
         </div>
     </div>
@@ -156,7 +462,7 @@
     <div id="bottom-panel">
         <div id="bottom-header">
             <span>로컬 관측 채널 목록</span>
-            <button id="btn-edit-mode" onclick="App.toggleEditMode()">편집 모드 (잠금)</button>
+            <button id="btn-edit-mode" onclick="App.toggleEditMode()">편집 모드</button>
         </div>
         <div id="bottom-bar">
             <div class="empty-fav">로컬 데이터 로드 중...</div>
@@ -173,79 +479,106 @@
                 SIGUNGU_GEOJSON: 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_municipalities_geo_simple.json',
                 WEATHER: 'https://api.open-meteo.com/v1/forecast',
                 GEOCODE: 'https://nominatim.openstreetmap.org/reverse',
-                MAP_TILE: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
+                MAP_TILE: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png'
             },
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
             TIMEOUT: 12000,
             MAJOR_CITIES: [
-                { name: '서울특별시', lat: 37.5665, lng: 126.9780 }, { name: '부산광역시', lat: 35.1796, lng: 129.0756 },
-                { name: '대구광역시', lat: 35.8714, lng: 128.6014 }, { name: '인천광역시', lat: 37.4563, lng: 126.7052 },
-                { name: '광주광역시', lat: 35.1595, lng: 126.8526 }, { name: '대전광역시', lat: 36.3504, lng: 127.3845 },
-                { name: '세종특별자치시', lat: 36.4800, lng: 127.2890 }, { name: '제주특별자치도', lat: 33.4890, lng: 126.4983 },
-                { name: '경기도', lat: 37.2750, lng: 127.0094 }, { name: '강원도', lat: 37.8854, lng: 127.7298 },
-                { name: '충청북도', lat: 36.6356, lng: 127.4913 }, { name: '충청남도', lat: 36.6013, lng: 126.6608 },
-                { name: '전라북도', lat: 35.8202, lng: 127.1086 }, { name: '전라남도', lat: 34.8161, lng: 126.4629 },
-                { name: '경상북도', lat: 36.5760, lng: 128.5056 }, { name: '경상남도', lat: 35.2383, lng: 128.6924 }
+                { name: '서울특별시', lat: 37.5665, lng: 126.9780 },
+                { name: '부산광역시', lat: 35.1796, lng: 129.0756 },
+                { name: '대구광역시', lat: 35.8714, lng: 128.6014 },
+                { name: '인천광역시', lat: 37.4563, lng: 126.7052 },
+                { name: '광주광역시', lat: 35.1595, lng: 126.8526 },
+                { name: '대전광역시', lat: 36.3504, lng: 127.3845 },
+                { name: '세종특별자치시', lat: 36.4800, lng: 127.2890 },
+                { name: '제주특별자치도', lat: 33.4890, lng: 126.4983 },
+                { name: '경기도', lat: 37.2750, lng: 127.0094 },
+                { name: '강원도', lat: 37.8854, lng: 127.7298 },
+                { name: '충청북도', lat: 36.6356, lng: 127.4913 },
+                { name: '충청남도', lat: 36.6013, lng: 126.6608 },
+                { name: '전라북도', lat: 35.8202, lng: 127.1086 },
+                { name: '전라남도', lat: 34.8161, lng: 126.4629 },
+                { name: '경상북도', lat: 36.5760, lng: 128.5056 },
+                { name: '경상남도', lat: 35.2383, lng: 128.6924 }
             ]
         };
 
         const State = {
-            sidoGeoJSON: null, sigunguGeoJSON: null, currentWeather: null,
-            activeCCTV: null, isEditMode: false, syncInterval: null, currentFocusBounds: null
+            sidoGeoJSON: null,
+            sigunguGeoJSON: null,
+            currentWeather: null,
+            activeCCTV: null,
+            isEditMode: false,
+            syncInterval: null,
+            currentFocusBounds: null,
+            lastSearchName: null
         };
 
         const UI = {
-            showLoading: (msg) => {
-                document.getElementById('loading-text').innerText = msg || '동기화 중';
+            showLoading: function(msg) {
+                document.getElementById('loading-text').innerText = msg || '동기화 중...';
                 document.getElementById('loading-overlay').style.display = 'flex';
             },
-            hideLoading: () => { document.getElementById('loading-overlay').style.display = 'none'; },
-            showToast: (message, color = '#3498db') => {
-                const container = document.getElementById('toast-container');
-                const toast = document.createElement('div');
+            hideLoading: function() {
+                document.getElementById('loading-overlay').style.display = 'none';
+            },
+            showToast: function(message, color) {
+                color = color || '#3b82f6';
+                var container = document.getElementById('toast-container');
+                var toast = document.createElement('div');
                 toast.className = 'toast';
                 toast.style.borderColor = color;
-                toast.style.color = color === '#e74c3c' ? '#ff7675' : '#fff';
                 toast.innerText = message;
                 container.appendChild(toast);
-                setTimeout(() => toast.classList.add('show'), 10);
-                setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 2000);
+                setTimeout(function() { toast.classList.add('show'); }, 10);
+                setTimeout(function() {
+                    toast.classList.remove('show');
+                    setTimeout(function() { toast.remove(); }, 300);
+                }, 2200);
             },
-            updateHeader: (text) => { document.getElementById('current-location-text').innerText = text; },
-            resetWeatherWidget: () => { document.getElementById('weather-widget').style.display = 'none'; }
+            updateHeader: function(text) {
+                document.getElementById('current-location-text').innerText = text;
+            },
+            resetWeatherWidget: function() {
+                document.getElementById('weather-widget').style.display = 'none';
+            }
         };
 
-        async function fetchWithTimeout(resource, options = {}) {
-            const { timeout = CONFIG.TIMEOUT } = options;
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), timeout);
+        async function fetchWithTimeout(resource, options) {
+            options = options || {};
+            var timeout = options.timeout || CONFIG.TIMEOUT;
+            var controller = new AbortController();
+            var id = setTimeout(function() { controller.abort(); }, timeout);
             try {
-                const response = await fetch(resource, { ...options, signal: controller.signal });
-                clearTimeout(id); return response;
-            } catch (error) { clearTimeout(id); throw error; }
+                var response = await fetch(resource, Object.assign({}, options, { signal: controller.signal }));
+                clearTimeout(id);
+                return response;
+            } catch (error) {
+                clearTimeout(id);
+                throw error;
+            }
         }
 
-        // 통합 파서: ITS API가 JSON 대신 XML을 강제 반환하거나 필드명이 변형될 경우 방어
         function parseITSData(rawContent) {
             if (!rawContent) return [];
-            let list = [];
-
-            // 1. JSON 파싱 시도
+            var list = [];
             try {
-                const json = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-                if (json?.response?.data) {
+                var json = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+                if (json && json.response && json.response.data) {
                     list = Array.isArray(json.response.data) ? json.response.data : [json.response.data];
                 } else if (Array.isArray(json)) {
                     list = json;
                 }
             } catch (e) {
-                // 2. XML 파싱 (Fallback)
                 try {
-                    const parser = new DOMParser();
-                    const xml = parser.parseFromString(rawContent, 'text/xml');
-                    const dataNodes = xml.querySelectorAll('data');
-                    dataNodes.forEach(node => {
-                        const getTag = (t) => node.querySelector(t)?.textContent || node.querySelector(t.toLowerCase())?.textContent || node.querySelector(t.toUpperCase())?.textContent || '';
+                    var parser = new DOMParser();
+                    var xml = parser.parseFromString(rawContent, 'text/xml');
+                    var dataNodes = xml.querySelectorAll('data');
+                    dataNodes.forEach(function(node) {
+                        function getTag(t) {
+                            var el = node.querySelector(t) || node.querySelector(t.toLowerCase());
+                            return el ? el.textContent : '';
+                        }
                         list.push({
                             cctvname: getTag('cctvname') || getTag('cctvName') || '무명',
                             coordy: parseFloat(getTag('coordy') || getTag('coordY') || 0),
@@ -257,44 +590,55 @@
                     return [];
                 }
             }
-
-            return list.map(item => ({
-                cctvname: item.cctvname || item.cctvName || '교통 CCTV',
-                coordy: parseFloat(item.coordy || item.coordY || 0),
-                coordx: parseFloat(item.coordx || item.coordX || 0),
-                cctvurl: item.cctvurl || item.cctvUrl || ''
-            })).filter(item => item.cctvurl && item.cctvurl.trim() !== '');
+            return list.map(function(item) {
+                return {
+                    cctvname: item.cctvname || item.cctvName || '교통 CCTV',
+                    coordy: parseFloat(item.coordy || item.coordY || 0),
+                    coordx: parseFloat(item.coordx || item.coordX || 0),
+                    cctvurl: item.cctvurl || item.cctvUrl || ''
+                };
+            }).filter(function(item) {
+                return item.cctvurl && item.cctvurl.trim() !== '';
+            });
         }
 
         async function getAddressFromCoords(lat, lng) {
             try {
-                const res = await fetchWithTimeout(`${CONFIG.API.GEOCODE}?format=json&lat=${lat}&lon=${lng}&zoom=14&accept-language=ko`, { timeout: 3000 });
-                const data = await res.json();
+                var res = await fetchWithTimeout(CONFIG.API.GEOCODE + '?format=json&lat=' + lat + '&lon=' + lng + '&zoom=14&accept-language=ko', { timeout: 3000 });
+                var data = await res.json();
                 if (data && data.address) {
-                    const ad = data.address;
-                    let result = [];
+                    var ad = data.address;
+                    var result = [];
                     if (ad.city || ad.province) result.push(ad.city || ad.province);
                     if (ad.borough || ad.county) result.push(ad.borough || ad.county);
                     if (ad.town || ad.village) result.push(ad.town || ad.village);
                     return result.join(' ') || '상세 주소 확인 불가';
                 }
                 return '행정구역 정보 없음';
-            } catch (e) { return '지오코딩 연동 지연'; }
+            } catch (e) {
+                return '지오코딩 연동 지연';
+            }
         }
 
         function parseWeather(code) {
-            let icon = "☀️"; let text = "맑음"; let color = "#2ecc71"; let bg = "#353b48"; let rain = "정상";
-            if ([1, 2, 3].includes(code)) { icon = "☁️"; text = "흐림"; color = "#bdc3c7"; }
-            else if ([45, 48].includes(code)) { icon = "🌫️"; text = "안개"; color = "#95a5a6"; }
-            else if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) { icon = "🌧️"; text = "강우"; color = "#e74c3c"; bg = "#4b2c2c"; rain = "강우 감지"; }
-            else if ([71, 73, 75, 77].includes(code)) { icon = "❄️"; text = "강설"; color = "#3498db"; bg = "#2c3e50"; rain = "강설 감지"; }
-            else if ([95, 96, 99].includes(code)) { icon = "⚡"; text = "폭우/낙뢰"; color = "#c0392b"; bg = "#5c2626"; rain = "위험 기상"; }
-            return { icon, text, color, bg, rain };
+            var icon = '☀️', text = '맑음', color = '#22c55e', bg = '#1e293b', rain = '정상';
+            if ([1,2,3].indexOf(code) !== -1) { icon = '☁️'; text = '흐림'; color = '#94a3b8'; }
+            else if ([45,48].indexOf(code) !== -1) { icon = '🌫️'; text = '안개'; color = '#94a3b8'; }
+            else if ([51,53,55,56,57,61,63,65,66,67,80,81,82].indexOf(code) !== -1) { icon = '🌧️'; text = '강우'; color = '#ef4444'; bg = '#3f1d1d'; rain = '강우 감지'; }
+            else if ([71,73,75,77].indexOf(code) !== -1) { icon = '❄️'; text = '강설'; color = '#3b82f6'; bg = '#1e3a5f'; rain = '강설 감지'; }
+            else if ([95,96,99].indexOf(code) !== -1) { icon = '⚡'; text = '폭우/낙뢰'; color = '#dc2626'; bg = '#450a0a'; rain = '위험 기상'; }
+            return { icon: icon, text: text, color: color, bg: bg, rain: rain };
         }
 
-        const App = {
-            map: null, geoLayer: null, clusterGroup: null, infoLabelLayer: null,
-            hlsInstance: null, currentLevel: 0, favorites: [], currentFocusBounds: null,
+        var App = {
+            map: null,
+            geoLayer: null,
+            clusterGroup: null,
+            infoLabelLayer: null,
+            hlsInstance: null,
+            currentLevel: 0,
+            favorites: [],
+            currentFocusBounds: null,
 
             init: async function() {
                 this.initMap();
@@ -302,190 +646,244 @@
                 this.loadFavorites();
                 await this.loadSpatialData();
                 this.fetchGlobalWeather();
-                this.fetchFavoritesWeather();
                 this.startAutoSync();
             },
 
             initMap: function() {
-                this.map = L.map('map', { center: [35.8, 127.5], zoom: 7, minZoom: 7, maxBounds: CONFIG.BOUNDS, maxBoundsViscosity: 1.0 });
-                L.tileLayer(CONFIG.API.MAP_TILE, { attribution: 'CartoDB' }).addTo(this.map);
-                
+                this.map = L.map('map', {
+                    center: [35.8, 127.5],
+                    zoom: 7,
+                    maxBounds: CONFIG.BOUNDS,
+                    zoomControl: false
+                });
+                L.tileLayer(CONFIG.API.MAP_TILE, {
+                    attribution: '© CartoDB',
+                    maxZoom: 18
+                }).addTo(this.map);
+                L.control.zoom({ position: 'bottomright' }).addTo(this.map);
+
+                this.clusterGroup = L.markerClusterGroup({
+                    showCoverageOnHover: false,
+                    maxClusterRadius: 50
+                }).addTo(this.map);
                 this.infoLabelLayer = L.layerGroup().addTo(this.map);
-                this.clusterGroup = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 40, spiderfyOnMaxZoom: true, disableClusteringAtZoom: 13 });
-                this.map.addLayer(this.clusterGroup);
             },
 
             initGeocoder: function() {
-                L.Control.geocoder({ defaultMarkGeocode: false, placeholder: "검색" }).on('markgeocode', async (e) => {
-                    const addr = await getAddressFromCoords(e.geocode.center.lat, e.geocode.center.lng);
-                    this.executeDirectSearch(addr, e.geocode.center.lat, e.geocode.center.lng);
+                var self = this;
+                L.Control.geocoder({
+                    defaultMarkGeocode: false,
+                    placeholder: '시·군·구 또는 도로명 검색...',
+                    errorMessage: '검색 결과가 없습니다',
+                    geocoder: L.Control.Geocoder.nominatim({
+                        geocodingQueryParams: { countrycodes: 'kr', 'accept-language': 'ko' }
+                    })
+                }).on('markgeocode', function(e) {
+                    var name = e.geocode.name || (e.geocode.properties && e.geocode.properties.display_name) || '검색 지점';
+                    var shortName = name.split(',').slice(0, 3).join(' ').trim();
+                    State.lastSearchName = shortName;
+                    self.executeDirectSearch(shortName, e.geocode.center.lat, e.geocode.center.lng);
                 }).addTo(this.map);
             },
 
             startAutoSync: function() {
-                if(State.syncInterval) clearInterval(State.syncInterval);
-                State.syncInterval = setInterval(() => {
-                    this.fetchFavoritesWeather();
-                    if(this.currentLevel === 0) this.fetchGlobalWeather();
-                    if(this.currentLevel === 2 && this.currentFocusBounds) {
-                        const center = this.currentFocusBounds.getCenter();
-                        this.fetchWeatherData(center.lat, center.lng);
+                var self = this;
+                if (State.syncInterval) clearInterval(State.syncInterval);
+                State.syncInterval = setInterval(function() {
+                    self.fetchFavoritesWeather();
+                    if (self.currentLevel === 0) self.fetchGlobalWeather();
+                    if (self.currentLevel === 2 && self.currentFocusBounds) {
+                        var center = self.currentFocusBounds.getCenter();
+                        self.fetchWeatherData(center.lat, center.lng);
                     }
                 }, 60000);
             },
 
             fetchGlobalWeather: async function() {
+                var self = this;
                 this.infoLabelLayer.clearLayers();
-                const promises = CONFIG.MAJOR_CITIES.map(async city => {
-                    const res = await fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${city.lat}&longitude=${city.lng}&current_weather=true&timezone=Asia%2FSeoul`);
-                    const data = await res.json();
+                var promises = CONFIG.MAJOR_CITIES.map(async function(city) {
+                    var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + city.lat + '&longitude=' + city.lng + '&current_weather=true&timezone=Asia%2FSeoul');
+                    var data = await res.json();
                     return { name: city.name, lat: city.lat, lng: city.lng, weather: data.current_weather };
                 });
-                const results = await Promise.allSettled(promises);
+                var results = await Promise.allSettled(promises);
                 this.renderIntegratedMarkers(results);
             },
 
             fetchLocalWeather: async function(geoJsonLayer) {
+                var self = this;
                 this.infoLabelLayer.clearLayers();
-                const promises = [];
-                geoJsonLayer.eachLayer(layer => {
-                    const center = layer.getBounds().getCenter();
-                    const name = layer.feature.properties.name;
+                var promises = [];
+                geoJsonLayer.eachLayer(function(layer) {
+                    var center = layer.getBounds().getCenter();
+                    var name = layer.feature.properties.name;
                     promises.push(
-                        fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${center.lat}&longitude=${center.lng}&current_weather=true&timezone=Asia%2FSeoul`)
-                        .then(res => res.json())
-                        .then(data => ({ name: name, lat: center.lat, lng: center.lng, weather: data.current_weather }))
+                        fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + center.lat + '&longitude=' + center.lng + '&current_weather=true&timezone=Asia%2FSeoul')
+                        .then(function(res) { return res.json(); })
+                        .then(function(data) {
+                            return { name: name, lat: center.lat, lng: center.lng, weather: data.current_weather };
+                        })
                     );
                 });
-                const results = await Promise.allSettled(promises);
+                var results = await Promise.allSettled(promises);
                 this.renderIntegratedMarkers(results);
             },
 
             renderIntegratedMarkers: function(resultsSettled) {
-                resultsSettled.forEach(res => {
-                    if(res.status === 'fulfilled') {
-                        const w = res.value.weather;
-                        const p = parseWeather(w.weathercode);
-                        
-                        const html = `
-                            <div class="integrated-marker" style="border-color:${p.color}">
-                                <div class="im-name">${res.value.name}</div>
-                                <div class="im-weather"><span style="font-size:14px;">${p.icon}</span> ${w.temperature}℃</div>
-                            </div>
-                        `;
-                        const icon = L.divIcon({ html: html, className: 'leaflet-div-icon-custom', iconSize: null });
-                        L.marker([res.value.lat, res.value.lng], { icon: icon, interactive: false }).addTo(this.infoLabelLayer);
+                var self = this;
+                resultsSettled.forEach(function(res) {
+                    if (res.status === 'fulfilled') {
+                        var w = res.value.weather;
+                        var p = parseWeather(w.weathercode);
+                        var html = '<div class="integrated-marker" style="border-color:' + p.color + '">' +
+                            '<div class="im-name">' + res.value.name + '</div>' +
+                            '<div class="im-weather"><span style="font-size:14px">' + p.icon + '</span> ' + w.temperature + '℃</div>' +
+                            '</div>';
+                        var icon = L.divIcon({ html: html, className: 'leaflet-div-icon-custom', iconSize: null });
+                        L.marker([res.value.lat, res.value.lng], { icon: icon, interactive: false }).addTo(self.infoLabelLayer);
                     }
                 });
             },
 
             toggleEditMode: function() {
                 State.isEditMode = !State.isEditMode;
-                const btn = document.getElementById('btn-edit-mode');
-                const addBtn = document.getElementById('btn-fav-add');
-                const bar = document.getElementById('bottom-bar');
-
+                var btn = document.getElementById('btn-edit-mode');
+                var addBtn = document.getElementById('btn-fav-add');
+                var bar = document.getElementById('bottom-bar');
                 if (State.isEditMode) {
-                    btn.innerText = '편집 완료'; btn.classList.add('active'); bar.classList.add('edit-mode');
+                    btn.innerText = '편집 완료';
+                    btn.classList.add('active');
+                    bar.classList.add('edit-mode');
                     if (State.activeCCTV) addBtn.style.display = 'inline-block';
-                    UI.showToast('항목 삭제 및 등록 허용됨', '#f1c40f');
+                    UI.showToast('편집 모드 · 삭제/등록 가능', '#f59e0b');
                 } else {
-                    btn.innerText = '편집 모드 (잠금)'; btn.classList.remove('active'); bar.classList.remove('edit-mode');
+                    btn.innerText = '편집 모드';
+                    btn.classList.remove('active');
+                    bar.classList.remove('edit-mode');
                     addBtn.style.display = 'none';
                 }
             },
 
             loadFavorites: function() {
-                const stored = localStorage.getItem('cctv_fav_v7');
-                if (stored) { this.favorites = JSON.parse(stored); } 
-                else {
-                    this.favorites = [ { id: 'f1', name: '양양(양양IC)', lat: 38.064, lng: 128.599, address: '강원도 양양군 서면', url: '' } ];
+                var stored = localStorage.getItem('cctv_fav_v7');
+                if (stored) {
+                    this.favorites = JSON.parse(stored);
+                } else {
+                    this.favorites = [{ id: 'f1', name: '양양(양양IC)', lat: 38.064, lng: 128.599, address: '강원도 양양군 서면', url: '' }];
                     this.saveFavorites();
                 }
                 this.renderFavoritesUI();
             },
 
-            saveFavorites: function() { localStorage.setItem('cctv_fav_v7', JSON.stringify(this.favorites)); },
+            saveFavorites: function() {
+                localStorage.setItem('cctv_fav_v7', JSON.stringify(this.favorites));
+            },
 
             addCurrentToFavorites: async function() {
                 if (!State.isEditMode || !State.activeCCTV) return;
-                const cctv = State.activeCCTV;
-                if (this.favorites.find(f => f.name === cctv.name)) { UI.showToast('기등록 데이터', '#e74c3c'); return; }
-
-                UI.showLoading('좌표 변환');
-                const address = await getAddressFromCoords(cctv.lat, cctv.lng);
-                
-                this.favorites.unshift({ id: 'fav_' + Date.now(), name: cctv.name, lat: cctv.lat, lng: cctv.lng, url: cctv.url, address: address });
-                this.saveFavorites(); this.renderFavoritesUI(); this.fetchFavoritesWeather();
-                
-                UI.hideLoading(); UI.showToast('로컬 채널 저장 완료', '#2ecc71');
+                var cctv = State.activeCCTV;
+                if (this.favorites.find(function(f) { return f.name === cctv.name; })) {
+                    UI.showToast('이미 등록된 채널입니다', '#ef4444');
+                    return;
+                }
+                UI.showLoading('주소 변환 중');
+                var address = await getAddressFromCoords(cctv.lat, cctv.lng);
+                this.favorites.unshift({
+                    id: 'fav_' + Date.now(),
+                    name: cctv.name,
+                    lat: cctv.lat,
+                    lng: cctv.lng,
+                    url: cctv.url,
+                    address: address
+                });
+                this.saveFavorites();
+                this.renderFavoritesUI();
+                this.fetchFavoritesWeather();
+                UI.hideLoading();
+                UI.showToast('채널이 저장되었습니다', '#22c55e');
             },
 
             removeFavorite: function(id, event) {
                 event.stopPropagation();
                 if (!State.isEditMode) return;
-                this.favorites = this.favorites.filter(f => f.id !== id);
-                this.saveFavorites(); this.renderFavoritesUI();
+                this.favorites = this.favorites.filter(function(f) { return f.id !== id; });
+                this.saveFavorites();
+                this.renderFavoritesUI();
             },
 
             renderFavoritesUI: function() {
-                const bar = document.getElementById('bottom-bar');
+                var self = this;
+                var bar = document.getElementById('bottom-bar');
                 bar.innerHTML = '';
-                if (this.favorites.length === 0) { bar.innerHTML = '<div class="empty-fav">로컬 채널이 없습니다.</div>'; return; }
-
-                this.favorites.forEach(fav => {
-                    const card = document.createElement('div');
+                if (this.favorites.length === 0) {
+                    bar.innerHTML = '<div class="empty-fav">등록된 채널이 없습니다</div>';
+                    return;
+                }
+                this.favorites.forEach(function(fav) {
+                    var card = document.createElement('div');
                     card.className = 'fav-card';
-                    card.onclick = () => { if(!State.isEditMode) this.executeDirectSearch(fav.name, fav.lat, fav.lng, true, fav.url); };
-                    
-                    card.innerHTML = `
-                        <button class="fav-remove" onclick="App.removeFavorite('${fav.id}', event)">삭제</button>
-                        <div class="fav-screen">
-                            <div class="fav-live-tag"><div class="fav-live-dot"></div>LIVE</div>
-                            <div class="fav-play-icon">▶</div>
-                            <div class="fav-name-tag">${fav.name}</div>
-                        </div>
-                        <div class="fav-details">
-                            <div class="fav-loc" title="${fav.address}">${fav.address}</div>
-                            <div class="fav-weather" id="fav-w-${fav.id}">
-                                <span style="color:#7f8fa6">동기화 대기</span>
-                            </div>
-                        </div>
-                    `;
+                    card.onclick = function() {
+                        if (!State.isEditMode) self.executeDirectSearch(fav.name, fav.lat, fav.lng, true, fav.url);
+                    };
+                    card.innerHTML =
+                        '<button class="fav-remove" onclick="App.removeFavorite(\'' + fav.id + '\', event)">삭제</button>' +
+                        '<div class="fav-screen">' +
+                            '<div class="fav-live-tag">LIVE</div>' +
+                            '<div class="fav-play-icon">▶</div>' +
+                            '<div class="fav-name-tag">' + fav.name + '</div>' +
+                        '</div>' +
+                        '<div class="fav-details">' +
+                            '<div class="fav-loc" title="' + fav.address + '">' + fav.address + '</div>' +
+                            '<div class="fav-weather" id="fav-w-' + fav.id + '"><span style="color:var(--muted)">대기</span></div>' +
+                        '</div>';
                     bar.appendChild(card);
                 });
             },
 
             fetchFavoritesWeather: async function() {
-                this.favorites.forEach(async (fav) => {
+                this.favorites.forEach(async function(fav) {
                     try {
-                        const res = await fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${fav.lat}&longitude=${fav.lng}&current_weather=true&timezone=Asia%2FSeoul`, { timeout: 4000 });
-                        const data = await res.json();
-                        const p = parseWeather(data.current_weather.weathercode);
-                        const el = document.getElementById(`fav-w-${fav.id}`);
-                        if(el) { el.innerHTML = `<span style="color:${p.color}">${p.icon}</span> ${data.current_weather.temperature}℃`; }
-                    } catch(e) {}
+                        var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + fav.lat + '&longitude=' + fav.lng + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4000 });
+                        var data = await res.json();
+                        var p = parseWeather(data.current_weather.weathercode);
+                        var el = document.getElementById('fav-w-' + fav.id);
+                        if (el) el.innerHTML = '<span style="color:' + p.color + '">' + p.icon + '</span> ' + data.current_weather.temperature + '℃';
+                    } catch (e) {}
                 });
             },
 
             loadSpatialData: async function() {
-                UI.showLoading('초기 공간망 구축');
+                UI.showLoading('공간 데이터 로딩');
                 try {
-                    const [sidoRes, sigunguRes] = await Promise.all([ fetchWithTimeout(CONFIG.API.SIDO_GEOJSON), fetchWithTimeout(CONFIG.API.SIGUNGU_GEOJSON) ]);
-                    State.sidoGeoJSON = await sidoRes.json(); State.sigunguGeoJSON = await sigunguRes.json();
+                    var sidoRes = await fetchWithTimeout(CONFIG.API.SIDO_GEOJSON);
+                    var sigunguRes = await fetchWithTimeout(CONFIG.API.SIGUNGU_GEOJSON);
+                    State.sidoGeoJSON = await sidoRes.json();
+                    State.sigunguGeoJSON = await sigunguRes.json();
                     this.renderGeoLayer(State.sidoGeoJSON, 1);
-                } catch (e) { UI.showToast('공간 통신 오류', '#e74c3c'); } finally { UI.hideLoading(); }
+                } catch (e) {
+                    UI.showToast('공간 데이터 로드 실패', '#ef4444');
+                } finally {
+                    UI.hideLoading();
+                }
             },
 
             renderGeoLayer: function(geoJsonData, targetLevel) {
-                if(this.geoLayer) this.map.removeLayer(this.geoLayer);
-                
+                var self = this;
+                if (this.geoLayer) this.map.removeLayer(this.geoLayer);
                 this.geoLayer = L.geoJSON(geoJsonData, {
-                    style: { color: targetLevel === 1 ? '#2980b9' : '#8e44ad', weight: targetLevel === 1 ? 2 : 1, fillOpacity: 0.05 },
-                    onEachFeature: (feature, layer) => {
-                        layer.on('click', () => {
-                            if(targetLevel === 1) this.handleSidoClick(feature.properties.code, feature.properties.name, layer.getBounds());
-                            else this.handleSigunguClick(feature.properties.name, layer.getBounds());
+                    style: {
+                        color: targetLevel === 1 ? '#3b82f6' : '#a855f7',
+                        weight: targetLevel === 1 ? 2 : 1.5,
+                        fillOpacity: 0.06
+                    },
+                    onEachFeature: function(feature, layer) {
+                        layer.on('click', function() {
+                            if (targetLevel === 1) {
+                                self.handleSidoClick(feature.properties.code, feature.properties.name, layer.getBounds());
+                            } else {
+                                self.handleSigunguClick(feature.properties.name, layer.getBounds());
+                            }
                         });
                     }
                 }).addTo(this.map);
@@ -493,11 +891,15 @@
 
             handleSidoClick: async function(sidoCode, name, bounds) {
                 this.currentLevel = 1;
-                UI.updateHeader(`[${name}] 하위 구역 확인`);
+                UI.updateHeader('[' + name + '] 하위 구역 확인');
                 UI.resetWeatherWidget();
                 this.map.fitBounds(bounds);
-
-                const filtered = { ...State.sigunguGeoJSON, features: State.sigunguGeoJSON.features.filter(f => f.properties.code.startsWith(sidoCode)) };
+                var filtered = {
+                    type: State.sigunguGeoJSON.type,
+                    features: State.sigunguGeoJSON.features.filter(function(f) {
+                        return f.properties.code.indexOf(sidoCode) === 0;
+                    })
+                };
                 this.renderGeoLayer(filtered, 2);
                 this.fetchLocalWeather(this.geoLayer);
             },
@@ -506,161 +908,194 @@
                 this.currentLevel = 2;
                 this.currentFocusBounds = bounds;
                 this.map.fitBounds(bounds);
-                UI.updateHeader(`관측 대상: ${name}`);
-                
-                const center = bounds.getCenter();
+                UI.updateHeader('관측 대상: ' + name);
+                var center = bounds.getCenter();
                 this.fetchWeatherData(center.lat, center.lng);
                 this.fetchActualCCTVData(bounds, false);
             },
 
-            executeDirectSearch: function(name, lat, lng, autoPlay = false, forceUrl = '') {
-                if(State.isEditMode) return;
+            // 검색 전용: 너무 확대하지 않고 주변 CCTV가 보이도록
+            executeDirectSearch: function(name, lat, lng, autoPlay, forceUrl) {
+                autoPlay = autoPlay || false;
+                forceUrl = forceUrl || '';
+                if (State.isEditMode) return;
                 this.currentLevel = 2;
-                const bounds = L.latLngBounds([lat - 0.02, lng - 0.02], [lat + 0.02, lng + 0.02]);
-                
-                this.map.fitBounds(bounds);
+
+                // 검색 시 적당한 범위 (군/구 단위 + 주변 CCTV)
+                var pad = 0.07;
+                var bounds = L.latLngBounds(
+                    [lat - pad, lng - pad],
+                    [lat + pad, lng + pad]
+                );
+                this.map.fitBounds(bounds, { maxZoom: 12, padding: [30, 30] });
                 this.currentFocusBounds = bounds;
-                UI.updateHeader(`관측 지점: ${name}`);
-                
-                if(this.geoLayer) this.map.removeLayer(this.geoLayer);
-                
-                this.fetchWeatherData(lat, lng);
+
+                UI.updateHeader('관측 지점: ' + name);
+                State.lastSearchName = name;
+
+                if (this.geoLayer) this.map.removeLayer(this.geoLayer);
                 this.infoLabelLayer.clearLayers();
-                
+
+                this.fetchWeatherData(lat, lng);
+
                 if (autoPlay && forceUrl) {
                     this.clearCCTVResources();
                     this.renderCCTVDots([{ cctvname: name, coordy: lat, coordx: lng, cctvurl: forceUrl }]);
-                    document.getElementById('video-title').innerText = `[송출] ${name}`;
-                    this.playCCTVStream(forceUrl, { name, lat, lng, url: forceUrl });
-                } else { 
-                    this.fetchActualCCTVData(bounds, false, 1, autoPlay); 
+                    document.getElementById('video-title').innerText = '[송출] ' + name;
+                    this.playCCTVStream(forceUrl, { name: name, lat: lat, lng: lng, url: forceUrl });
+                } else {
+                    this.fetchActualCCTVData(bounds, false, 1, autoPlay);
                 }
             },
 
             fetchWeatherData: async function(lat, lon) {
-                const widget = document.getElementById('weather-widget'); widget.style.display = 'block';
-                document.getElementById('weather-condition').innerText = "분석 중";
+                var widget = document.getElementById('weather-widget');
+                widget.style.display = 'block';
+                document.getElementById('weather-condition').innerText = '분석 중';
                 try {
-                    const res = await fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=Asia%2FSeoul`);
-                    const data = await res.json();
+                    var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + lat + '&longitude=' + lon + '&current_weather=true&timezone=Asia%2FSeoul');
+                    var data = await res.json();
                     State.currentWeather = data.current_weather;
-
-                    const now = new Date();
-                    const p = parseWeather(data.current_weather.weathercode);
-
+                    var now = new Date();
+                    var p = parseWeather(data.current_weather.weathercode);
                     widget.style.backgroundColor = p.bg;
-                    document.getElementById('weather-time').innerText = `시각: ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
-                    document.getElementById('weather-condition').innerHTML = `${p.icon} <span style="color:${p.color}">${p.text}</span>`;
-                    document.getElementById('weather-temp').innerText = `온도: ${data.current_weather.temperature}℃`;
-                    document.getElementById('weather-wind').innerText = `풍속: ${data.current_weather.windspeed} km/h`;
-                    document.getElementById('weather-status').innerText = `분석: ${p.rain}`;
+                    document.getElementById('weather-time').innerText = '시각: ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+                    document.getElementById('weather-condition').innerHTML = p.icon + ' <span style="color:' + p.color + '">' + p.text + '</span>';
+                    document.getElementById('weather-temp').innerText = '온도: ' + data.current_weather.temperature + '℃';
+                    document.getElementById('weather-wind').innerText = '풍속: ' + data.current_weather.windspeed + ' km/h';
+                    document.getElementById('weather-status').innerText = '분석: ' + p.rain;
                     document.getElementById('weather-status').style.color = p.color;
-                } catch (e) { UI.showToast('기상 수신 실패', '#e74c3c'); }
-            },
-
-            // Vercel 프록시 API 호출 및 Bounding Box 보정
-            fetchActualCCTVData: async function(bounds, isBroadSearch = false, attempt = 1, autoPlay = false) {
-                if(!isBroadSearch) this.clearCCTVResources();
-                if(!isBroadSearch) UI.showLoading('인프라 좌표 렌더링');
-
-                const center = bounds.getCenter();
-                // 1차 시도 시 기본 반경, 2차 시도 시 확장 반경 적용
-                const padVal = attempt === 1 ? 0.08 : 0.2;
-                const minX = (center.lng - padVal).toFixed(5);
-                const maxX = (center.lng + padVal).toFixed(5);
-                const minY = (center.lat - padVal).toFixed(5);
-                const maxY = (center.lat + padVal).toFixed(5);
-
-                const endpoint = `${CONFIG.API.CCTV_PROXY}?minX=${minX}&maxX=${maxX}&minY=${minY}&maxY=${maxY}&type=all&cctvType=1`;
-                
-                try {
-                    const res = await fetchWithTimeout(endpoint, { timeout: 8000 });
-                    if (!res.ok) throw new Error('API 통신 오류');
-                    
-                    const rawData = await res.text();
-                    const cctvDataArray = parseITSData(rawData);
-
-                    if (!cctvDataArray || cctvDataArray.length === 0) {
-                        if (attempt === 1 && !isBroadSearch) return this.fetchActualCCTVData(bounds, false, 2, autoPlay);
-                        if(!isBroadSearch) UI.showToast('해당 반경 내 CCTV가 없습니다.', '#e74c3c');
-                        return;
-                    }
-                    
-                    this.renderCCTVDots(cctvDataArray, autoPlay);
-                    UI.showToast(`CCTV ${cctvDataArray.length}개소 동기화 완료`, '#2ecc71');
-
-                } catch (error) { 
-                    if(!isBroadSearch) UI.showToast('네트워크 연동 지연', '#e74c3c'); 
-                } 
-                finally { 
-                    UI.hideLoading(); 
+                } catch (e) {
+                    UI.showToast('기상 수신 실패', '#ef4444');
                 }
             },
 
-            renderCCTVDots: function(cctvArray, autoPlay = false) {
-                const markers = [];
-                const dotIcon = L.divIcon({ className: 'cctv-dot', iconSize: [14, 14] });
+            fetchActualCCTVData: async function(bounds, isBroadSearch, attempt, autoPlay) {
+                isBroadSearch = isBroadSearch || false;
+                attempt = attempt || 1;
+                autoPlay = autoPlay || false;
 
-                cctvArray.forEach((cctv, i) => {
-                    const marker = L.marker([cctv.coordy, cctv.coordx], { icon: dotIcon });
-                    marker.bindPopup(`<b>[CCTV] ${cctv.cctvname}</b>`);
-                    marker.on('click', () => {
-                        document.getElementById('video-title').innerText = `[송출] ${cctv.cctvname}`;
-                        this.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
+                if (!isBroadSearch) this.clearCCTVResources();
+                if (!isBroadSearch) UI.showLoading('인프라 좌표 렌더링');
+
+                var center = bounds.getCenter();
+                var padVal = attempt === 1 ? 0.09 : 0.18;
+                var minX = (center.lng - padVal).toFixed(5);
+                var maxX = (center.lng + padVal).toFixed(5);
+                var minY = (center.lat - padVal).toFixed(5);
+                var maxY = (center.lat + padVal).toFixed(5);
+
+                var endpoint = CONFIG.API.CCTV_PROXY + '?minX=' + minX + '&maxX=' + maxX + '&minY=' + minY + '&maxY=' + maxY + '&type=ex&cctvType=1';
+
+                try {
+                    var res = await fetchWithTimeout(endpoint, { timeout: 8000 });
+                    if (!res.ok) throw new Error('API 통신 오류');
+                    var rawData = await res.text();
+                    var cctvDataArray = parseITSData(rawData);
+
+                    if (!cctvDataArray || cctvDataArray.length === 0) {
+                        if (attempt === 1 && !isBroadSearch) {
+                            return this.fetchActualCCTVData(bounds, false, 2, autoPlay);
+                        }
+                        if (!isBroadSearch) UI.showToast('해당 반경 내 CCTV가 없습니다', '#ef4444');
+                        return;
+                    }
+                    this.renderCCTVDots(cctvDataArray, autoPlay);
+                    UI.showToast('CCTV ' + cctvDataArray.length + '개소 동기화 완료', '#22c55e');
+                } catch (error) {
+                    if (!isBroadSearch) UI.showToast('네트워크 연동 지연', '#ef4444');
+                } finally {
+                    UI.hideLoading();
+                }
+            },
+
+            renderCCTVDots: function(cctvArray, autoPlay) {
+                autoPlay = autoPlay || false;
+                var self = this;
+                var markers = [];
+                var dotIcon = L.divIcon({ className: 'cctv-dot', iconSize: [14, 14] });
+
+                cctvArray.forEach(function(cctv, i) {
+                    var marker = L.marker([cctv.coordy, cctv.coordx], { icon: dotIcon });
+                    marker.bindPopup('<b>[CCTV] ' + cctv.cctvname + '</b>');
+                    marker.on('click', function() {
+                        document.getElementById('video-title').innerText = '[송출] ' + cctv.cctvname;
+                        self.playCCTVStream(cctv.cctvurl, {
+                            name: cctv.cctvname,
+                            lat: cctv.coordy,
+                            lng: cctv.coordx,
+                            url: cctv.cctvurl
+                        });
                     });
                     markers.push(marker);
 
                     if (autoPlay && i === 0) {
-                        document.getElementById('video-title').innerText = `[송출] ${cctv.cctvname}`;
-                        this.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
+                        document.getElementById('video-title').innerText = '[송출] ' + cctv.cctvname;
+                        self.playCCTVStream(cctv.cctvurl, {
+                            name: cctv.cctvname,
+                            lat: cctv.coordy,
+                            lng: cctv.coordx,
+                            url: cctv.cctvurl
+                        });
                     }
                 });
                 this.clusterGroup.addLayers(markers);
             },
 
             playCCTVStream: function(streamUrl, cctvObj) {
-                const wrapper = document.getElementById('video-content');
-                const badge = document.getElementById('video-badge');
-                
+                var wrapper = document.getElementById('video-content');
+                var badge = document.getElementById('video-badge');
                 State.activeCCTV = cctvObj;
-                if(State.isEditMode) document.getElementById('btn-fav-add').style.display = 'inline-block';
-                
-                if (this.hlsInstance) { this.hlsInstance.destroy(); this.hlsInstance = null; }
+                if (State.isEditMode) document.getElementById('btn-fav-add').style.display = 'inline-block';
+
+                if (this.hlsInstance) {
+                    this.hlsInstance.destroy();
+                    this.hlsInstance = null;
+                }
 
                 wrapper.innerHTML = '<video id="cctv-player" controls autoplay muted playsinline></video>';
-                const video = document.getElementById('cctv-player');
-                badge.innerText = "연결 중"; badge.className = "video-badge";
+                var video = document.getElementById('cctv-player');
+                badge.innerText = '연결 중';
+                badge.className = 'video-badge';
 
                 if (Hls.isSupported()) {
                     this.hlsInstance = new Hls({ enableWorker: true, lowLatencyMode: true });
                     this.hlsInstance.loadSource(streamUrl);
                     this.hlsInstance.attachMedia(video);
-                    this.hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-                        video.play().catch(() => {});
-                        badge.innerText = "LIVE"; badge.className = "video-badge active";
+                    this.hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
+                        video.play().catch(function() {});
+                        badge.innerText = 'LIVE';
+                        badge.className = 'video-badge active';
                     });
-                    this.hlsInstance.on(Hls.Events.ERROR, () => {
-                        badge.innerText = "ERROR"; UI.showToast('스트림 수신 거절 (네트워크 룰 제약)', '#e74c3c');
+                    this.hlsInstance.on(Hls.Events.ERROR, function() {
+                        badge.innerText = 'ERROR';
+                        UI.showToast('스트림 수신 거절', '#ef4444');
                     });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = streamUrl;
-                    video.addEventListener('loadedmetadata', () => {
-                        video.play().catch(() => {});
-                        badge.innerText = "LIVE"; badge.className = "video-badge active";
+                    video.addEventListener('loadedmetadata', function() {
+                        video.play().catch(function() {});
+                        badge.innerText = 'LIVE';
+                        badge.className = 'video-badge active';
                     });
                 }
             },
 
             clearCCTVResources: function() {
-                if (this.hlsInstance) { this.hlsInstance.destroy(); this.hlsInstance = null; }
+                if (this.hlsInstance) {
+                    this.hlsInstance.destroy();
+                    this.hlsInstance = null;
+                }
                 if (this.clusterGroup) this.clusterGroup.clearLayers();
-                
-                const badge = document.getElementById('video-badge');
-                if (badge) { badge.innerText = "대기"; badge.className = "video-badge"; }
-                
-                const wrapper = document.getElementById('video-content');
-                if(wrapper) wrapper.innerHTML = '<div class="placeholder">지도 상의 인프라 마커(붉은 점) 또는<br>하단 채널을 선택하십시오.</div>';
-                
+                var badge = document.getElementById('video-badge');
+                if (badge) {
+                    badge.innerText = '대기';
+                    badge.className = 'video-badge';
+                }
+                var wrapper = document.getElementById('video-content');
+                if (wrapper) {
+                    wrapper.innerHTML = '<div class="placeholder">지도 상의 인프라 마커(붉은 점) 또는<br>하단 채널을 선택하세요</div>';
+                }
                 State.activeCCTV = null;
                 document.getElementById('btn-fav-add').style.display = 'none';
             },
@@ -669,6 +1104,7 @@
                 this.clearCCTVResources();
                 UI.resetWeatherWidget();
                 this.currentFocusBounds = null;
+                State.lastSearchName = null;
 
                 if (this.currentLevel === 2) {
                     this.currentLevel = 1;
@@ -676,17 +1112,22 @@
                     this.map.setZoom(8);
                 } else if (this.currentLevel === 1) {
                     this.currentLevel = 0;
-                    UI.updateHeader('시스템 동기화 완료. 관측 대상 시/도를 선택하십시오.');
+                    UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
                     this.renderGeoLayer(State.sidoGeoJSON, 1);
                     this.fetchGlobalWeather();
                     this.map.setView([35.8, 127.5], 7);
                 }
             },
 
-            resetMap: function() { this.currentLevel = 1; this.goBack(); }
+            resetMap: function() {
+                this.currentLevel = 1;
+                this.goBack();
+            }
         };
 
-        document.addEventListener('DOMContentLoaded', () => App.init());
+        document.addEventListener('DOMContentLoaded', function() {
+            App.init();
+        });
     </script>
 </body>
 </html>
