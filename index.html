@@ -4,17 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>광역 인프라 및 기상 관측 통합 대시보드</title>
-    
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
-    
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    
+
     <style>
         :root {
             --bg: #0f1419;
@@ -418,7 +418,7 @@
             <button onclick="App.resetMap()">초기화</button>
         </div>
     </div>
-    
+
     <div id="content">
         <div id="map-container">
             <div id="map"></div>
@@ -427,7 +427,7 @@
                 <span id="loading-text">동기화 중...</span>
             </div>
         </div>
-        
+
         <div id="side-panel">
             <div id="weather-widget">
                 <div class="widget-header">
@@ -436,7 +436,7 @@
                 </div>
                 <div class="weather-main" id="weather-condition">대기</div>
                 <div class="weather-sub">
-                    <span id="weather-temp">기온: - ℃</span> | 
+                    <span id="weather-temp">기온: - ℃</span> |
                     <span id="weather-wind">풍속: - km/h</span>
                     <div id="weather-status" style="margin-top:4px;font-weight:600;">분석: -</div>
                 </div>
@@ -512,7 +512,9 @@
             syncInterval: null,
             currentFocusBounds: null,
             lastSearchName: null,
-            fromSearch: false
+            fromSearch: false,
+            parentSidoCode: null,
+            parentSidoName: null
         };
 
         const UI = {
@@ -625,9 +627,15 @@
             var icon = '☀️', text = '맑음', color = '#22c55e', bg = '#1e293b', rain = '정상';
             if ([1,2,3].indexOf(code) !== -1) { icon = '☁️'; text = '흐림'; color = '#94a3b8'; }
             else if ([45,48].indexOf(code) !== -1) { icon = '🌫️'; text = '안개'; color = '#94a3b8'; }
-            else if ([51,53,55,56,57,61,63,65,66,67,80,81,82].indexOf(code) !== -1) { icon = '🌧️'; text = '강우'; color = '#ef4444'; bg = '#3f1d1d'; rain = '강우 감지'; }
-            else if ([71,73,75,77].indexOf(code) !== -1) { icon = '❄️'; text = '강설'; color = '#3b82f6'; bg = '#1e3a5f'; rain = '강설 감지'; }
-            else if ([95,96,99].indexOf(code) !== -1) { icon = '⚡'; text = '폭우/낙뢰'; color = '#dc2626'; bg = '#450a0a'; rain = '위험 기상'; }
+            else if ([51,53,55,56,57,61,63,65,66,67,80,81,82].indexOf(code) !== -1) {
+                icon = '🌧️'; text = '강우'; color = '#ef4444'; bg = '#3f1d1d'; rain = '강우 감지';
+            }
+            else if ([71,73,75,77].indexOf(code) !== -1) {
+                icon = '❄️'; text = '강설'; color = '#3b82f6'; bg = '#1e3a5f'; rain = '강설 감지';
+            }
+            else if ([95,96,99].indexOf(code) !== -1) {
+                icon = '⚡'; text = '폭우/낙뢰'; color = '#dc2626'; bg = '#450a0a'; rain = '위험 기상';
+            }
             return { icon: icon, text: text, color: color, bg: bg, rain: rain };
         }
 
@@ -745,7 +753,6 @@
                 });
             },
 
-            // 검색 지역 날씨 아이콘 빠른 표시
             showSearchWeatherMarker: async function(name, lat, lng) {
                 try {
                     var res = await fetchWithTimeout(
@@ -910,13 +917,15 @@
             handleSidoClick: async function(sidoCode, name, bounds) {
                 this.currentLevel = 1;
                 State.fromSearch = false;
+                State.parentSidoCode = null;
+                State.parentSidoName = null;
                 UI.updateHeader('[' + name + '] 하위 구역 확인');
                 UI.resetWeatherWidget();
                 this.map.fitBounds(bounds);
                 var filtered = {
                     type: State.sigunguGeoJSON.type,
                     features: State.sigunguGeoJSON.features.filter(function(f) {
-                        return f.properties.code.indexOf(sidoCode) === 0;
+                        return String(f.properties.code).indexOf(String(sidoCode)) === 0;
                     })
                 };
                 this.renderGeoLayer(filtered, 2);
@@ -934,7 +943,6 @@
                 this.fetchActualCCTVData(bounds, false);
             },
 
-            // 검색: 시군구 경계선 + 날씨 아이콘 + 뒤로가기 지원
             executeDirectSearch: function(name, lat, lng, autoPlay, forceUrl) {
                 autoPlay = autoPlay || false;
                 forceUrl = forceUrl || '';
@@ -949,6 +957,9 @@
                 var matchedBounds = null;
                 var matchedName = name;
 
+                State.parentSidoCode = null;
+                State.parentSidoName = null;
+
                 if (State.sigunguGeoJSON && State.sigunguGeoJSON.features) {
                     for (var i = 0; i < State.sigunguGeoJSON.features.length; i++) {
                         var f = State.sigunguGeoJSON.features[i];
@@ -958,6 +969,21 @@
                                 matchedFeature = f;
                                 matchedBounds = layer.getBounds();
                                 matchedName = f.properties.name || name;
+
+                                // 부모 시도 기억
+                                if (f.properties && f.properties.code) {
+                                    var sidoCode = String(f.properties.code).substring(0, 2);
+                                    State.parentSidoCode = sidoCode;
+                                    if (State.sidoGeoJSON && State.sidoGeoJSON.features) {
+                                        for (var j = 0; j < State.sidoGeoJSON.features.length; j++) {
+                                            var sf = State.sidoGeoJSON.features[j];
+                                            if (String(sf.properties.code).indexOf(sidoCode) === 0 || String(sf.properties.code) === sidoCode) {
+                                                State.parentSidoName = sf.properties.name;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
                                 break;
                             }
                         } catch (e) {}
@@ -984,7 +1010,6 @@
                     this.currentFocusBounds = bounds;
                 }
 
-                // 날씨 아이콘 + 사이드 패널 날씨 병렬
                 this.fetchWeatherData(lat, lng);
                 this.showSearchWeatherMarker(matchedName, lat, lng);
 
@@ -1150,7 +1175,6 @@
                 document.getElementById('btn-fav-add').style.display = 'none';
             },
 
-            // 뒤로가기: 검색으로 들어와도 정상 복귀
             goBack: function() {
                 this.clearCCTVResources();
                 UI.resetWeatherWidget();
@@ -1158,13 +1182,38 @@
                 State.lastSearchName = null;
 
                 if (this.currentLevel === 2) {
-                    // 검색으로 들어왔든, 클릭으로 들어왔든 → 전국(시도) 단계로 복귀
-                    this.currentLevel = 0;
-                    State.fromSearch = false;
-                    UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
-                    this.renderGeoLayer(State.sidoGeoJSON, 1);
-                    this.fetchGlobalWeather();
-                    this.map.setView([35.8, 127.5], 7);
+                    // 검색으로 들어온 경우 → 부모 시도 단계로 복귀
+                    if (State.fromSearch && State.parentSidoCode) {
+                        this.currentLevel = 1;
+                        State.fromSearch = false;
+
+                        var sidoName = State.parentSidoName || '상위 구역';
+                        UI.updateHeader('[' + sidoName + '] 하위 구역 확인');
+
+                        var filtered = {
+                            type: State.sigunguGeoJSON.type,
+                            features: State.sigunguGeoJSON.features.filter(function(f) {
+                                return String(f.properties.code).indexOf(State.parentSidoCode) === 0;
+                            })
+                        };
+                        this.renderGeoLayer(filtered, 2);
+
+                        if (this.geoLayer) {
+                            this.map.fitBounds(this.geoLayer.getBounds(), { padding: [20, 20] });
+                        }
+                        this.fetchLocalWeather(this.geoLayer);
+
+                        State.parentSidoCode = null;
+                        State.parentSidoName = null;
+                    } else {
+                        // 일반 클릭으로 들어온 경우 → 전국
+                        this.currentLevel = 0;
+                        State.fromSearch = false;
+                        UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
+                        this.renderGeoLayer(State.sidoGeoJSON, 1);
+                        this.fetchGlobalWeather();
+                        this.map.setView([35.8, 127.5], 7);
+                    }
                 } else if (this.currentLevel === 1) {
                     this.currentLevel = 0;
                     UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
@@ -1176,6 +1225,9 @@
 
             resetMap: function() {
                 this.currentLevel = 2;
+                State.fromSearch = false;
+                State.parentSidoCode = null;
+                State.parentSidoName = null;
                 this.goBack();
             }
         };
