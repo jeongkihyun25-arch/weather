@@ -482,7 +482,7 @@
                 MAP_TILE: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png'
             },
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
-            TIMEOUT: 12000,
+            TIMEOUT: 10000,
             MAJOR_CITIES: [
                 { name: '서울특별시', lat: 37.5665, lng: 126.9780 },
                 { name: '부산광역시', lat: 35.1796, lng: 129.0756 },
@@ -511,7 +511,8 @@
             isEditMode: false,
             syncInterval: null,
             currentFocusBounds: null,
-            lastSearchName: null
+            lastSearchName: null,
+            fromSearch: false
         };
 
         const UI = {
@@ -534,7 +535,7 @@
                 setTimeout(function() {
                     toast.classList.remove('show');
                     setTimeout(function() { toast.remove(); }, 300);
-                }, 2200);
+                }, 2000);
             },
             updateHeader: function(text) {
                 document.getElementById('current-location-text').innerText = text;
@@ -604,7 +605,7 @@
 
         async function getAddressFromCoords(lat, lng) {
             try {
-                var res = await fetchWithTimeout(CONFIG.API.GEOCODE + '?format=json&lat=' + lat + '&lon=' + lng + '&zoom=14&accept-language=ko', { timeout: 3000 });
+                var res = await fetchWithTimeout(CONFIG.API.GEOCODE + '?format=json&lat=' + lat + '&lon=' + lng + '&zoom=14&accept-language=ko', { timeout: 2500 });
                 var data = await res.json();
                 if (data && data.address) {
                     var ad = data.address;
@@ -681,7 +682,6 @@
                 }).on('markgeocode', function(e) {
                     var name = e.geocode.name || (e.geocode.properties && e.geocode.properties.display_name) || '검색 지점';
                     var shortName = name.split(',').slice(0, 3).join(' ').trim();
-                    State.lastSearchName = shortName;
                     self.executeDirectSearch(shortName, e.geocode.center.lat, e.geocode.center.lng);
                 }).addTo(this.map);
             },
@@ -700,10 +700,10 @@
             },
 
             fetchGlobalWeather: async function() {
-                var self = this;
                 this.infoLabelLayer.clearLayers();
+                var self = this;
                 var promises = CONFIG.MAJOR_CITIES.map(async function(city) {
-                    var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + city.lat + '&longitude=' + city.lng + '&current_weather=true&timezone=Asia%2FSeoul');
+                    var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + city.lat + '&longitude=' + city.lng + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 5000 });
                     var data = await res.json();
                     return { name: city.name, lat: city.lat, lng: city.lng, weather: data.current_weather };
                 });
@@ -712,14 +712,13 @@
             },
 
             fetchLocalWeather: async function(geoJsonLayer) {
-                var self = this;
                 this.infoLabelLayer.clearLayers();
                 var promises = [];
                 geoJsonLayer.eachLayer(function(layer) {
                     var center = layer.getBounds().getCenter();
                     var name = layer.feature.properties.name;
                     promises.push(
-                        fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + center.lat + '&longitude=' + center.lng + '&current_weather=true&timezone=Asia%2FSeoul')
+                        fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + center.lat + '&longitude=' + center.lng + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4500 })
                         .then(function(res) { return res.json(); })
                         .then(function(data) {
                             return { name: name, lat: center.lat, lng: center.lng, weather: data.current_weather };
@@ -744,6 +743,25 @@
                         L.marker([res.value.lat, res.value.lng], { icon: icon, interactive: false }).addTo(self.infoLabelLayer);
                     }
                 });
+            },
+
+            // 검색 지역 날씨 아이콘 빠른 표시
+            showSearchWeatherMarker: async function(name, lat, lng) {
+                try {
+                    var res = await fetchWithTimeout(
+                        CONFIG.API.WEATHER + '?latitude=' + lat + '&longitude=' + lng + '&current_weather=true&timezone=Asia%2FSeoul',
+                        { timeout: 3500 }
+                    );
+                    var data = await res.json();
+                    var w = data.current_weather;
+                    var p = parseWeather(w.weathercode);
+                    var html = '<div class="integrated-marker" style="border-color:' + p.color + '">' +
+                        '<div class="im-name">' + name + '</div>' +
+                        '<div class="im-weather"><span style="font-size:14px">' + p.icon + '</span> ' + w.temperature + '℃</div>' +
+                        '</div>';
+                    var icon = L.divIcon({ html: html, className: 'leaflet-div-icon-custom', iconSize: null });
+                    L.marker([lat, lng], { icon: icon, interactive: false }).addTo(this.infoLabelLayer);
+                } catch (e) {}
             },
 
             toggleEditMode: function() {
@@ -844,7 +862,7 @@
             fetchFavoritesWeather: async function() {
                 this.favorites.forEach(async function(fav) {
                     try {
-                        var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + fav.lat + '&longitude=' + fav.lng + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4000 });
+                        var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + fav.lat + '&longitude=' + fav.lng + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 3500 });
                         var data = await res.json();
                         var p = parseWeather(data.current_weather.weathercode);
                         var el = document.getElementById('fav-w-' + fav.id);
@@ -891,6 +909,7 @@
 
             handleSidoClick: async function(sidoCode, name, bounds) {
                 this.currentLevel = 1;
+                State.fromSearch = false;
                 UI.updateHeader('[' + name + '] 하위 구역 확인');
                 UI.resetWeatherWidget();
                 this.map.fitBounds(bounds);
@@ -906,6 +925,7 @@
 
             handleSigunguClick: function(name, bounds) {
                 this.currentLevel = 2;
+                State.fromSearch = false;
                 this.currentFocusBounds = bounds;
                 this.map.fitBounds(bounds);
                 UI.updateHeader('관측 대상: ' + name);
@@ -914,29 +934,59 @@
                 this.fetchActualCCTVData(bounds, false);
             },
 
-            // 검색 전용: 너무 확대하지 않고 주변 CCTV가 보이도록
+            // 검색: 시군구 경계선 + 날씨 아이콘 + 뒤로가기 지원
             executeDirectSearch: function(name, lat, lng, autoPlay, forceUrl) {
                 autoPlay = autoPlay || false;
                 forceUrl = forceUrl || '';
                 if (State.isEditMode) return;
+
                 this.currentLevel = 2;
-
-                // 검색 시 적당한 범위 (군/구 단위 + 주변 CCTV)
-                var pad = 0.07;
-                var bounds = L.latLngBounds(
-                    [lat - pad, lng - pad],
-                    [lat + pad, lng + pad]
-                );
-                this.map.fitBounds(bounds, { maxZoom: 12, padding: [30, 30] });
-                this.currentFocusBounds = bounds;
-
-                UI.updateHeader('관측 지점: ' + name);
+                State.fromSearch = true;
                 State.lastSearchName = name;
+                UI.updateHeader('관측 지점: ' + name);
+
+                var matchedFeature = null;
+                var matchedBounds = null;
+                var matchedName = name;
+
+                if (State.sigunguGeoJSON && State.sigunguGeoJSON.features) {
+                    for (var i = 0; i < State.sigunguGeoJSON.features.length; i++) {
+                        var f = State.sigunguGeoJSON.features[i];
+                        try {
+                            var layer = L.geoJSON(f);
+                            if (layer.getBounds().contains([lat, lng])) {
+                                matchedFeature = f;
+                                matchedBounds = layer.getBounds();
+                                matchedName = f.properties.name || name;
+                                break;
+                            }
+                        } catch (e) {}
+                    }
+                }
 
                 if (this.geoLayer) this.map.removeLayer(this.geoLayer);
                 this.infoLabelLayer.clearLayers();
 
+                if (matchedFeature && matchedBounds) {
+                    this.geoLayer = L.geoJSON(matchedFeature, {
+                        style: {
+                            color: '#a855f7',
+                            weight: 2,
+                            fillOpacity: 0.08
+                        }
+                    }).addTo(this.map);
+                    this.map.fitBounds(matchedBounds, { maxZoom: 12, padding: [20, 20] });
+                    this.currentFocusBounds = matchedBounds;
+                } else {
+                    var pad = 0.06;
+                    var bounds = L.latLngBounds([lat - pad, lng - pad], [lat + pad, lng + pad]);
+                    this.map.fitBounds(bounds, { maxZoom: 12, padding: [20, 20] });
+                    this.currentFocusBounds = bounds;
+                }
+
+                // 날씨 아이콘 + 사이드 패널 날씨 병렬
                 this.fetchWeatherData(lat, lng);
+                this.showSearchWeatherMarker(matchedName, lat, lng);
 
                 if (autoPlay && forceUrl) {
                     this.clearCCTVResources();
@@ -944,7 +994,7 @@
                     document.getElementById('video-title').innerText = '[송출] ' + name;
                     this.playCCTVStream(forceUrl, { name: name, lat: lat, lng: lng, url: forceUrl });
                 } else {
-                    this.fetchActualCCTVData(bounds, false, 1, autoPlay);
+                    this.fetchActualCCTVData(this.currentFocusBounds, false, 1, autoPlay);
                 }
             },
 
@@ -953,7 +1003,7 @@
                 widget.style.display = 'block';
                 document.getElementById('weather-condition').innerText = '분석 중';
                 try {
-                    var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + lat + '&longitude=' + lon + '&current_weather=true&timezone=Asia%2FSeoul');
+                    var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + lat + '&longitude=' + lon + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4000 });
                     var data = await res.json();
                     State.currentWeather = data.current_weather;
                     var now = new Date();
@@ -979,7 +1029,7 @@
                 if (!isBroadSearch) UI.showLoading('인프라 좌표 렌더링');
 
                 var center = bounds.getCenter();
-                var padVal = attempt === 1 ? 0.09 : 0.18;
+                var padVal = attempt === 1 ? 0.07 : 0.14;
                 var minX = (center.lng - padVal).toFixed(5);
                 var maxX = (center.lng + padVal).toFixed(5);
                 var minY = (center.lat - padVal).toFixed(5);
@@ -988,7 +1038,7 @@
                 var endpoint = CONFIG.API.CCTV_PROXY + '?minX=' + minX + '&maxX=' + maxX + '&minY=' + minY + '&maxY=' + maxY + '&type=ex&cctvType=1';
 
                 try {
-                    var res = await fetchWithTimeout(endpoint, { timeout: 8000 });
+                    var res = await fetchWithTimeout(endpoint, { timeout: 5500 });
                     if (!res.ok) throw new Error('API 통신 오류');
                     var rawData = await res.text();
                     var cctvDataArray = parseITSData(rawData);
@@ -1100,6 +1150,7 @@
                 document.getElementById('btn-fav-add').style.display = 'none';
             },
 
+            // 뒤로가기: 검색으로 들어와도 정상 복귀
             goBack: function() {
                 this.clearCCTVResources();
                 UI.resetWeatherWidget();
@@ -1107,9 +1158,13 @@
                 State.lastSearchName = null;
 
                 if (this.currentLevel === 2) {
-                    this.currentLevel = 1;
-                    UI.updateHeader('상위 구역 복귀');
-                    this.map.setZoom(8);
+                    // 검색으로 들어왔든, 클릭으로 들어왔든 → 전국(시도) 단계로 복귀
+                    this.currentLevel = 0;
+                    State.fromSearch = false;
+                    UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
+                    this.renderGeoLayer(State.sidoGeoJSON, 1);
+                    this.fetchGlobalWeather();
+                    this.map.setView([35.8, 127.5], 7);
                 } else if (this.currentLevel === 1) {
                     this.currentLevel = 0;
                     UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
@@ -1120,7 +1175,7 @@
             },
 
             resetMap: function() {
-                this.currentLevel = 1;
+                this.currentLevel = 2;
                 this.goBack();
             }
         };
