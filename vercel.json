@@ -1,8 +1,0 @@
-{
-  "regions": ["icn1"],
-  "functions": {
-    "api/cctv.js": {
-      "maxDuration": 30
-    }
-  }
-}
