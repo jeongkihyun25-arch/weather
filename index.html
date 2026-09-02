@@ -509,7 +509,7 @@
                 SIGUNGU_GEOJSON: 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_municipalities_geo_simple.json',
                 WEATHER: 'https://api.open-meteo.com/v1/forecast',
                 GEOCODE: 'https://nominatim.openstreetmap.org/reverse',
-                MAP_TILE: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png'
+                MAP_TILE: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
             },
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
             TIMEOUT: 12000,
@@ -727,7 +727,7 @@
                     renderer: L.canvas()
                 });
                 L.tileLayer(CONFIG.API.MAP_TILE, {
-                    attribution: '© CartoDB',
+                    attribution: '© Esri',
                     maxZoom: 18,
                     updateWhenIdle: true,
                     keepBuffer: 2
