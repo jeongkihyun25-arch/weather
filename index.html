@@ -3,6 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- 모바일 단독 앱(가젯) 모드 활성화를 위한 설정 -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CCTV관측">
+    <meta name="theme-color" content="#0f1419">
+    
+    <!-- 바탕화면 설치 시 표시될 아이콘 (레이더 이모지) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📡</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%230f1419%22/><text x=%2250%22 y=%2250%22 font-size=%2270%22 text-anchor=%22middle%22 dominant-baseline=%22central%22>📡</text></svg>">
+
     <title>광역 인프라 및 기상 관측 통합 대시보드</title>
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -37,10 +49,16 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            /* 모바일에서 텍스트 선택 방지 (앱처럼 보이게) */
+            -webkit-user-select: none;
+            user-select: none;
         }
         #header {
             flex: 0 0 56px;
             padding: 0 16px;
+            /* 아이폰 노치/상태바 영역 대응(안전 영역) 여백 추가 */
+            padding-top: env(safe-area-inset-top);
+            height: calc(56px + env(safe-area-inset-top));
             background: rgba(15,20,25,0.95);
             border-bottom: 1px solid var(--border);
             display: flex;
@@ -78,7 +96,7 @@
             display: flex;
             flex-direction: column;
         }
-        #map { flex: 1; width: 100%; background: #1e293b; }
+        #map { flex: 1; width: 100%; background: #1e293b; z-index: 1; }
 
         /* 새로 추가된 GPS 내 위치 찾기 버튼 */
         #btn-my-location {
@@ -277,6 +295,7 @@
             display: flex;
             flex-direction: column;
             width: 100%;
+            padding-bottom: env(safe-area-inset-bottom);
         }
         #bottom-header {
             height: 34px;
