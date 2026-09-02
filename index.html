@@ -80,6 +80,28 @@
         }
         #map { flex: 1; width: 100%; background: #1e293b; }
 
+        /* 새로 추가된 GPS 내 위치 찾기 버튼 */
+        #btn-my-location {
+            position: absolute;
+            bottom: 24px;
+            left: 14px;
+            z-index: 1000;
+            background: var(--card);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            font-size: 18px;
+            transition: background 0.2s, transform 0.1s;
+        }
+        #btn-my-location:active { transform: scale(0.95); background: var(--border); }
+
         #side-panel {
             flex: 1;
             background: var(--panel);
@@ -141,6 +163,7 @@
             font-weight: 600;
         }
         #video-content { flex: 1; position: relative; display: flex; }
+        
         .placeholder {
             color: var(--muted);
             margin: auto;
@@ -148,14 +171,26 @@
             text-align: center;
             padding: 16px;
             line-height: 1.5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
         }
+        /* 영상 버퍼링용 스피너 */
+        .video-loader {
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--danger);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 0.8s linear infinite;
+        }
+
         video { width: 100%; height: 100%; object-fit: contain; position: absolute; inset: 0; background: #000; }
 
-        .video-controls { display: flex; gap: 8px; align-items: center; }
-        #btn-fav-add {
-            padding: 5px 10px;
-            background: var(--success);
-            color: #111;
+        .video-controls { display: flex; gap: 6px; align-items: center; }
+        .action-btn {
+            padding: 5px 8px;
             border: none;
             border-radius: 6px;
             font-size: 11px;
@@ -163,6 +198,10 @@
             cursor: pointer;
             display: none;
         }
+        #btn-fav-add { background: var(--success); color: #111; }
+        #btn-pip { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+        #btn-fullscreen { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+        
         .video-badge {
             font-size: 10px;
             padding: 2px 6px;
@@ -436,6 +475,7 @@
             #content { flex-direction: column; }
             #map-container { flex: 1.25; border-right: none; border-bottom: 1px solid var(--border); }
             #side-panel { flex: 1; min-width: 0; padding: 10px; }
+            #btn-my-location { bottom: 14px; left: 10px; width: 36px; height: 36px; font-size: 16px; }
         }
     </style>
 </head>
@@ -451,6 +491,8 @@
     <div id="content">
         <div id="map-container">
             <div id="map"></div>
+            <!-- 내 위치 찾기 버튼 -->
+            <button id="btn-my-location" onclick="App.findMyLocation()" title="내 위치 중심으로 탐색">🎯</button>
             <div id="loading-overlay">
                 <div class="spinner"></div>
                 <span id="loading-text">동기화 중...</span>
@@ -478,7 +520,9 @@
                         <span id="video-badge" class="video-badge">대기</span>
                     </div>
                     <div class="video-controls">
-                        <button id="btn-fav-add" onclick="App.addCurrentToFavorites()">채널 등록</button>
+                        <button id="btn-pip" class="action-btn" onclick="App.togglePIP()" title="팝업 모드">PIP</button>
+                        <button id="btn-fullscreen" class="action-btn" onclick="App.toggleFullscreen()">전체화면</button>
+                        <button id="btn-fav-add" class="action-btn" onclick="App.addCurrentToFavorites()">채널 등록</button>
                     </div>
                 </div>
                 <div id="video-content">
@@ -540,7 +584,7 @@
         const State = {
             currentWeather: null, activeCCTV: null, isEditMode: false, syncInterval: null,
             currentFocusBounds: null, lastSearchName: null, fromSearch: false, parentSidoCode: null,
-            parentSidoName: null, resizeTimer: null, parserWorker: null
+            parentSidoName: null, parserWorker: null, hlsRetryCount: 0
         };
 
         const UI = {
@@ -717,10 +761,12 @@
 
             initResizeListener: function() {
                 var self = this;
-                window.addEventListener('resize', function() {
-                    if (State.resizeTimer) clearTimeout(State.resizeTimer);
-                    State.resizeTimer = setTimeout(function() { if (self.map) self.map.invalidateSize(); }, 200);
-                });
+                if ('ResizeObserver' in window) {
+                    var resizeObserver = new ResizeObserver(function() {
+                        window.requestAnimationFrame(function() { if (self.map) self.map.invalidateSize(); });
+                    });
+                    resizeObserver.observe(document.body);
+                }
             },
 
             startAutoSync: function() {
@@ -734,6 +780,26 @@
                         self.fetchWeatherData(center.lat, center.lng);
                     }
                 }, 60000);
+            },
+
+            // GPS 기반 내 위치 찾기 기능
+            findMyLocation: function() {
+                if (!navigator.geolocation) {
+                    UI.showToast('위치 정보를 지원하지 않는 브라우저입니다', '#ef4444');
+                    return;
+                }
+                UI.showLoading('현재 위치 확인 중...');
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        UI.hideLoading();
+                        this.executeDirectSearch('내 위치 (GPS)', pos.coords.latitude, pos.coords.longitude);
+                    },
+                    (err) => {
+                        UI.hideLoading();
+                        UI.showToast('위치 권한이 거부되었거나 알 수 없는 오류입니다', '#ef4444');
+                    },
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                );
             },
 
             fetchGlobalWeather: async function() {
@@ -810,10 +876,41 @@
                 }
             },
 
+            // 비디오 PIP(Picture in Picture) 기능
+            togglePIP: async function() {
+                var video = document.getElementById("cctv-player");
+                if (!video) return;
+                try {
+                    if (document.pictureInPictureElement) {
+                        await document.exitPictureInPicture();
+                    } else if (document.pictureInPictureEnabled) {
+                        await video.requestPictureInPicture();
+                    } else {
+                        UI.showToast('PIP 모드를 지원하지 않는 브라우저입니다', '#ef4444');
+                    }
+                } catch(e) {
+                    UI.showToast('PIP 전환 중 오류가 발생했습니다', '#ef4444');
+                }
+            },
+
+            toggleFullscreen: function() {
+                var elem = document.getElementById("cctv-player");
+                if (!elem) return;
+                if (!document.fullscreenElement) {
+                    if (elem.requestFullscreen) { elem.requestFullscreen(); }
+                    else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
+                    else if (elem.msRequestFullscreen) { elem.msRequestFullscreen(); }
+                } else {
+                    if (document.exitFullscreen) { document.exitFullscreen(); }
+                }
+            },
+
             loadFavorites: function() {
-                var stored = localStorage.getItem('cctv_fav_v8');
-                if (stored) { this.favorites = JSON.parse(stored); } 
-                else {
+                try {
+                    var stored = localStorage.getItem('cctv_fav_v8');
+                    if (stored) { this.favorites = JSON.parse(stored); } 
+                    else { throw new Error('No default'); }
+                } catch (e) {
                     this.favorites = [{ id: 'f1', name: '양양(양양IC)', lat: 38.064, lng: 128.599, address: '강원도 양양군 서면', url: '' }];
                     this.saveFavorites();
                 }
@@ -1012,7 +1109,6 @@
                 var q = '?apiKey=' + CONFIG.API.ITS_KEY + '&type=ex&cctvType=1&minX=' + minX + '&maxX=' + maxX + '&minY=' + minY + '&maxY=' + maxY + '&getType=json';
 
                 try {
-                    // Cloudflare Worker 경유 통신
                     var proxyUrl = CONFIG.API.PROXY_BASE + encodeURIComponent(CONFIG.API.ITS_BASE + q);
                     var res = await fetchWithTimeout(proxyUrl, { timeout: 6000 });
                     var rawData = await res.text();
@@ -1055,17 +1151,24 @@
             playCCTVStream: function(streamUrl, cctvObj) {
                 var wrapper = document.getElementById('video-content'); var badge = document.getElementById('video-badge');
                 State.activeCCTV = cctvObj; State.hlsRetryCount = 0;
+                
+                document.getElementById('btn-pip').style.display = 'inline-block';
+                document.getElementById('btn-fullscreen').style.display = 'inline-block';
                 if (State.isEditMode) document.getElementById('btn-fav-add').style.display = 'inline-block';
                 if (this.hlsInstance) { this.hlsInstance.destroy(); this.hlsInstance = null; }
 
-                wrapper.innerHTML = '<video id="cctv-player" controls autoplay muted playsinline></video>';
+                // 영상을 불러오는 동안 표시할 스피너 애니메이션 적용
+                wrapper.innerHTML = '<div class="placeholder"><div class="video-loader"></div><span>채널 연결 중...</span></div><video id="cctv-player" controls autoplay muted playsinline style="display:none;"></video>';
                 var video = document.getElementById('cctv-player');
+                var placeholder = wrapper.querySelector('.placeholder');
                 badge.innerText = '연결 중'; badge.className = 'video-badge';
 
                 if (Hls.isSupported()) {
                     this.hlsInstance = new Hls({ enableWorker: true, lowLatencyMode: true });
                     this.hlsInstance.loadSource(streamUrl); this.hlsInstance.attachMedia(video);
                     this.hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
+                        if (placeholder) placeholder.style.display = 'none';
+                        video.style.display = 'block';
                         video.play().catch(function() {}); badge.innerText = 'LIVE'; badge.className = 'video-badge active';
                     });
                     var self = this;
@@ -1079,19 +1182,24 @@
                                     } else {
                                         badge.innerText = 'ERROR'; UI.showToast('연결 실패 (네트워크 제약)', '#ef4444');
                                         if (self.hlsInstance) self.hlsInstance.destroy();
+                                        if (placeholder) placeholder.innerHTML = '영상 신호를 수신할 수 없습니다.';
                                     }
                                     break;
                                 case Hls.ErrorTypes.MEDIA_ERROR:
                                     if (self.hlsInstance) self.hlsInstance.recoverMediaError(); break;
                                 default:
                                     if (self.hlsInstance) self.hlsInstance.destroy();
-                                    badge.innerText = 'OFFLINE'; UI.showToast('스트림 세션 만료', '#ef4444'); break;
+                                    badge.innerText = 'OFFLINE'; UI.showToast('스트림 세션 만료', '#ef4444'); 
+                                    if (placeholder) placeholder.innerHTML = '스트리밍 세션이 만료되었습니다.';
+                                    break;
                             }
                         }
                     });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = streamUrl;
                     video.addEventListener('loadedmetadata', function() {
+                        if (placeholder) placeholder.style.display = 'none';
+                        video.style.display = 'block';
                         video.play().catch(function() {}); badge.innerText = 'LIVE'; badge.className = 'video-badge active';
                     });
                 }
@@ -1108,7 +1216,10 @@
                 if (this.clusterGroup) this.clusterGroup.clearLayers();
                 var badge = document.getElementById('video-badge');
                 if (badge) { badge.innerText = '대기'; badge.className = 'video-badge'; }
-                State.activeCCTV = null; document.getElementById('btn-fav-add').style.display = 'none';
+                State.activeCCTV = null; 
+                document.getElementById('btn-fav-add').style.display = 'none';
+                document.getElementById('btn-pip').style.display = 'none';
+                document.getElementById('btn-fullscreen').style.display = 'none';
             },
 
             goBack: function() {
