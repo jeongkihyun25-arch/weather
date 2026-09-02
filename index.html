@@ -592,11 +592,25 @@
 
         const CacheStore = {
             sidoGeoJSON: null, sigunguGeoJSON: null, cctvDataMap: new Map(),
+            weatherCache: new Map(), // [속도 최적화] 날씨 데이터 캐싱 추가
             purgeExpiredCCTVCache: function() {
                 const now = Date.now();
                 for (const [key, val] of this.cctvDataMap.entries()) {
                     if (now - val.timestamp > CONFIG.CCTV_CACHE_TTL) this.cctvDataMap.delete(key);
                 }
+            },
+            // [속도 최적화] 동일/인접 구역의 중복 네트워크 호출을 막아 속도를 극대화하는 함수
+            getWeather: async function(lat, lng) {
+                var key = lat.toFixed(1) + '_' + lng.toFixed(1);
+                var now = Date.now();
+                var cached = this.weatherCache.get(key);
+                if (cached && (now - cached.ts < 600000)) { // 10분 캐시 유지
+                    return cached.data;
+                }
+                var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + lat.toFixed(3) + '&longitude=' + lng.toFixed(3) + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4500 });
+                var data = await res.json();
+                this.weatherCache.set(key, { ts: now, data: data.current_weather });
+                return data.current_weather;
             }
         };
 
@@ -801,7 +815,6 @@
                 }, 60000);
             },
 
-            // GPS 기반 내 위치 찾기 기능
             findMyLocation: function() {
                 if (!navigator.geolocation) {
                     UI.showToast('위치 정보를 지원하지 않는 브라우저입니다', '#ef4444');
@@ -821,31 +834,29 @@
                 );
             },
 
-            fetchGlobalWeather: async function() {
+            fetchGlobalWeather: function() {
                 this.infoLabelLayer.clearLayers();
-                var promises = CONFIG.MAJOR_CITIES.map(async function(city) {
-                    var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + city.lat.toFixed(3) + '&longitude=' + city.lng.toFixed(3) + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 5000 });
-                    var data = await res.json();
-                    return { name: city.name, lat: city.lat, lng: city.lng, weather: data.current_weather };
+                var self = this;
+                CONFIG.MAJOR_CITIES.forEach(async function(city) {
+                    try {
+                        var w = await CacheStore.getWeather(city.lat, city.lng);
+                        self.renderIntegratedMarkers([{ status: 'fulfilled', value: { name: city.name, lat: city.lat, lng: city.lng, weather: w } }]);
+                    } catch (e) {}
                 });
-                var results = await Promise.allSettled(promises);
-                this.renderIntegratedMarkers(results);
             },
 
-            fetchLocalWeather: async function(geoJsonLayer) {
+            // [속도 최적화] 로딩되는 순서대로 즉시 화면에 띄워 체감 속도 향상
+            fetchLocalWeather: function(geoJsonLayer) {
                 this.infoLabelLayer.clearLayers();
-                var promises = [];
-                geoJsonLayer.eachLayer(function(layer) {
+                var self = this;
+                geoJsonLayer.eachLayer(async function(layer) {
                     var center = layer.getBounds().getCenter();
                     var name = layer.feature.properties.name;
-                    promises.push(
-                        fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + center.lat.toFixed(3) + '&longitude=' + center.lng.toFixed(3) + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4500 })
-                        .then(function(res) { return res.json(); })
-                        .then(function(data) { return { name: name, lat: center.lat, lng: center.lng, weather: data.current_weather }; })
-                    );
+                    try {
+                        var w = await CacheStore.getWeather(center.lat, center.lng);
+                        self.renderIntegratedMarkers([{ status: 'fulfilled', value: { name: name, lat: center.lat, lng: center.lng, weather: w } }]);
+                    } catch(e) {}
                 });
-                var results = await Promise.allSettled(promises);
-                this.renderIntegratedMarkers(results);
             },
 
             renderIntegratedMarkers: function(resultsSettled) {
@@ -867,9 +878,7 @@
 
             showSearchWeatherMarker: async function(name, lat, lng) {
                 try {
-                    var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + lat.toFixed(3) + '&longitude=' + lng.toFixed(3) + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 3500 });
-                    var data = await res.json();
-                    var w = data.current_weather;
+                    var w = await CacheStore.getWeather(lat, lng);
                     var p = parseWeather(w.weathercode);
                     var html = '<div class="integrated-marker" style="border-color:' + p.color + '">' +
                         '<div class="im-name">' + name + '</div>' +
@@ -895,7 +904,6 @@
                 }
             },
 
-            // 비디오 PIP(Picture in Picture) 기능
             togglePIP: async function() {
                 var video = document.getElementById("cctv-player");
                 if (!video) return;
@@ -978,14 +986,13 @@
                 });
             },
 
-            fetchFavoritesWeather: async function() {
+            fetchFavoritesWeather: function() {
                 this.favorites.forEach(async function(fav) {
                     try {
-                        var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + fav.lat.toFixed(3) + '&longitude=' + fav.lng.toFixed(3) + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 3500 });
-                        var data = await res.json();
-                        var p = parseWeather(data.current_weather.weathercode);
+                        var w = await CacheStore.getWeather(fav.lat, fav.lng);
+                        var p = parseWeather(w.weathercode);
                         var el = document.getElementById('fav-w-' + fav.id);
-                        if (el) el.innerHTML = '<span style="color:' + p.color + '">' + p.icon + '</span> ' + data.current_weather.temperature + '℃';
+                        if (el) el.innerHTML = '<span style="color:' + p.color + '">' + p.icon + '</span> ' + w.temperature + '℃';
                     } catch (e) {}
                 });
             },
@@ -1022,19 +1029,28 @@
                 this.currentLevel = 1; State.fromSearch = false; State.parentSidoCode = null; State.parentSidoName = null;
                 UI.updateHeader('[' + name + '] 하위 구역 확인'); UI.resetWeatherWidget(); this.map.fitBounds(bounds);
                 
+                // [속도 최적화 1] 대량의 날씨 로딩 전에 CCTV 데이터 프록시 호출을 최우선으로 실행 (네트워크 큐 선점)
+                this.clearCCTVResources(); 
+                this.fetchActualCCTVData(bounds, true);
+
                 var filtered = {
                     type: CacheStore.sigunguGeoJSON.type,
                     features: CacheStore.sigunguGeoJSON.features.filter(function(f) { return String(f.properties.code).indexOf(String(sidoCode)) === 0; })
                 };
-                this.renderGeoLayer(filtered, 2); this.fetchLocalWeather(this.geoLayer);
-                this.clearCCTVResources(); this.fetchActualCCTVData(bounds, true);
+                this.renderGeoLayer(filtered, 2); 
+
+                // [속도 최적화 2] 렌더링을 차단하지 않도록 날씨 호출은 후순위 비동기로 실행
+                this.fetchLocalWeather(this.geoLayer);
             },
 
             handleSigunguClick: function(name, bounds) {
                 this.currentLevel = 2; State.fromSearch = false; this.currentFocusBounds = bounds; this.map.fitBounds(bounds);
                 UI.updateHeader('관측 대상: ' + name);
+                
+                // 순서 최적화
+                this.fetchActualCCTVData(bounds, false);
                 var center = bounds.getCenter();
-                this.fetchWeatherData(center.lat, center.lng); this.fetchActualCCTVData(bounds, false);
+                this.fetchWeatherData(center.lat, center.lng); 
             },
 
             executeDirectSearch: function(name, lat, lng, autoPlay, forceUrl) {
@@ -1094,14 +1110,14 @@
                 var widget = document.getElementById('weather-widget'); widget.style.display = 'block';
                 document.getElementById('weather-condition').innerText = '분석 중';
                 try {
-                    var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + lat.toFixed(3) + '&longitude=' + lon.toFixed(3) + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4000 });
-                    var data = await res.json(); State.currentWeather = data.current_weather;
-                    var now = new Date(); var p = parseWeather(data.current_weather.weathercode);
+                    var w = await CacheStore.getWeather(lat, lon);
+                    State.currentWeather = w;
+                    var now = new Date(); var p = parseWeather(w.weathercode);
                     widget.style.backgroundColor = p.bg;
                     document.getElementById('weather-time').innerText = '시각: ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
                     document.getElementById('weather-condition').innerHTML = p.icon + ' <span style="color:' + p.color + '">' + p.text + '</span>';
-                    document.getElementById('weather-temp').innerText = '온도: ' + data.current_weather.temperature + '℃';
-                    document.getElementById('weather-wind').innerText = '풍속: ' + data.current_weather.windspeed + ' km/h';
+                    document.getElementById('weather-temp').innerText = '온도: ' + w.temperature + '℃';
+                    document.getElementById('weather-wind').innerText = '풍속: ' + w.windspeed + ' km/h';
                     document.getElementById('weather-status').innerText = '분석: ' + p.rain;
                     document.getElementById('weather-status').style.color = p.color;
                 } catch (e) { UI.showToast('기상 수신 실패', '#ef4444'); }
