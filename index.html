@@ -182,7 +182,6 @@
 
         .leaflet-div-icon-custom { background: transparent; border: none; pointer-events: none !important; }
         
-        /* 통합 마커 GPU 가속 스케일링 최적화 */
         .integrated-marker {
             background: rgba(26,35,50,0.92);
             color: #fff;
@@ -222,7 +221,6 @@
             justify-content: center;
         }
         
-        /* 터치 오조작 방지 속성 부여 */
         .cctv-dot {
             width: 14px; height: 14px;
             background: var(--danger);
@@ -503,7 +501,6 @@
     <div id="toast-container"></div>
 
     <script>
-        // Vercel 프록시 제거 및 브라우저 다이렉트 우회용 설정 적용
         const CONFIG = {
             API: {
                 ITS_KEY: '70de7a2cb4cc411d8de01825666b6e80',
@@ -516,7 +513,7 @@
             },
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
             TIMEOUT: 12000,
-            CCTV_CACHE_TTL: 300000, // 5분
+            CCTV_CACHE_TTL: 300000, 
             MAJOR_CITIES: [
                 { name: '서울특별시', lat: 37.5665, lng: 126.9780 },
                 { name: '부산광역시', lat: 35.1796, lng: 129.0756 },
@@ -611,7 +608,6 @@
             }
         }
 
-        // Web Worker 설정: 메인 UI 스레드 렌더링 블로킹 방지용 비동기 파서
         function initDataWorker() {
             const workerCode = `
                 self.onmessage = function(e) {
@@ -632,7 +628,6 @@
                         }
                     } catch(err) {}
 
-                    // 정규식 기반 빠른 XML 파싱 (Fallback)
                     const dataBlocks = rawContent.match(/<data>[\\s\\S]*?<\\/data>/gi) || [];
                     dataBlocks.forEach(block => {
                         const nameMatch = block.match(/<cctvname>([\\s\\S]*?)<\\/cctvname>/i) || block.match(/<cctvName>([\\s\\S]*?)<\\/cctvName>/i);
@@ -723,7 +718,6 @@
             },
 
             initMap: function() {
-                // Canvas 렌더러로 DOM 부하 제거
                 this.map = L.map('map', {
                     center: [35.8, 127.5],
                     zoom: 7,
@@ -889,6 +883,7 @@
                     this.saveFavorites();
                 }
                 this.renderFavoritesUI();
+                this.fetchFavoritesWeather();
             },
 
             saveFavorites: function() {
@@ -1174,16 +1169,14 @@
                 var q = '?apiKey=' + CONFIG.API.ITS_KEY + '&type=ex&cctvType=1&minX=' + minX + '&maxX=' + maxX + '&minY=' + minY + '&maxY=' + maxY + '&getType=json';
 
                 try {
-                    // 클라이언트 브라우저에서 직접 CORS 우회 프록시 통신 (Vercel 제거)
                     var proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(CONFIG.API.ITS_BASE + q);
-                    var res = await fetchWithTimeout(proxyUrl, { timeout: 4000 });
+                    var res = await fetchWithTimeout(proxyUrl, { timeout: 3500 });
                     var rawData = await res.text();
                     var cctvDataArray = await parseITSDataAsync(rawData);
 
                     if (!cctvDataArray || cctvDataArray.length === 0) {
-                        // 1차 실패 시 AllOrigins 백업 프록시 시도
                         var fbUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(CONFIG.API.ITS_BASE + q);
-                        var fbRes = await fetchWithTimeout(fbUrl, { timeout: 6000 });
+                        var fbRes = await fetchWithTimeout(fbUrl, { timeout: 5000 });
                         var fbData = await fbRes.json();
                         cctvDataArray = await parseITSDataAsync(fbData.contents);
                     }
@@ -1192,13 +1185,12 @@
                         if (attempt === 1 && !isBroadSearch) {
                             return this.fetchActualCCTVData(bounds, false, 2, autoPlay);
                         }
-                        if (!isBroadSearch) UI.showToast('해당 반경 내 CCTV가 없습니다', '#ef4444');
+                        if (!isBroadSearch) UI.showToast('해당 반경 가용 채널 없음', '#ef4444');
                         return;
                     }
 
                     CacheStore.cctvDataMap.set(cacheKey, { timestamp: Date.now(), data: cctvDataArray });
                     this.renderCCTVDots(cctvDataArray, autoPlay);
-                    if (!isBroadSearch) UI.showToast('CCTV ' + cctvDataArray.length + '개소 동기화 완료', '#22c55e');
 
                 } catch (error) {
                     if (!isBroadSearch) UI.showToast('공공 서버 응답 지연', '#ef4444');
@@ -1244,7 +1236,6 @@
                 var wrapper = document.getElementById('video-content');
                 var badge = document.getElementById('video-badge');
                 State.activeCCTV = cctvObj;
-                State.hlsRetryCount = 0;
                 if (State.isEditMode) document.getElementById('btn-fav-add').style.display = 'inline-block';
 
                 if (this.hlsInstance) {
@@ -1266,30 +1257,9 @@
                         badge.innerText = 'LIVE';
                         badge.className = 'video-badge active';
                     });
-                    var self = this;
-                    this.hlsInstance.on(Hls.Events.ERROR, function(event, data) {
-                        if (data.fatal) {
-                            switch (data.type) {
-                                case Hls.ErrorTypes.NETWORK_ERROR:
-                                    if (State.hlsRetryCount < 3) {
-                                        State.hlsRetryCount++;
-                                        setTimeout(function() { if (self.hlsInstance) self.hlsInstance.startLoad(); }, 1500);
-                                    } else {
-                                        badge.innerText = 'ERROR';
-                                        UI.showToast('연결 실패 (네트워크 제약)', '#ef4444');
-                                        if (self.hlsInstance) self.hlsInstance.destroy();
-                                    }
-                                    break;
-                                case Hls.ErrorTypes.MEDIA_ERROR:
-                                    if (self.hlsInstance) self.hlsInstance.recoverMediaError();
-                                    break;
-                                default:
-                                    if (self.hlsInstance) self.hlsInstance.destroy();
-                                    badge.innerText = 'OFFLINE';
-                                    UI.showToast('스트림 세션 만료', '#ef4444');
-                                    break;
-                            }
-                        }
+                    this.hlsInstance.on(Hls.Events.ERROR, function() {
+                        badge.innerText = 'ERROR';
+                        UI.showToast('스트림 수신 거절', '#ef4444');
                     });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = streamUrl;
@@ -1360,14 +1330,14 @@
                     } else {
                         this.currentLevel = 0;
                         State.fromSearch = false;
-                        UI.updateHeader('시스템 초기화 완료 · 관측 대상 시/도를 선택하세요');
+                        UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
                         this.renderGeoLayer(CacheStore.sidoGeoJSON, 1);
                         this.fetchGlobalWeather();
                         this.map.setView([35.8, 127.5], 7);
                     }
                 } else if (this.currentLevel === 1) {
                     this.currentLevel = 0;
-                    UI.updateHeader('시스템 초기화 완료 · 관측 대상 시/도를 선택하세요');
+                    UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
                     this.renderGeoLayer(CacheStore.sidoGeoJSON, 1);
                     this.fetchGlobalWeather();
                     this.map.setView([35.8, 127.5], 7);
