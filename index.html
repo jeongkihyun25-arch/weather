@@ -11,6 +11,9 @@
     <meta name="apple-mobile-web-app-title" content="CCTV관측">
     <meta name="theme-color" content="#0f1419">
     
+    <!-- ★ 핵심 추가: HTTP 영상 리소스를 HTTPS로 강제 승격하여 보안 차단(Mixed Content) 우회 -->
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    
     <!-- 바탕화면 설치 시 표시될 아이콘 (레이더 이모지) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📡</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%230f1419%22/><text x=%2250%22 y=%2250%22 font-size=%2270%22 text-anchor=%22middle%22 dominant-baseline=%22central%22>📡</text></svg>">
@@ -49,14 +52,12 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            /* 모바일에서 텍스트 선택 방지 (앱처럼 보이게) */
             -webkit-user-select: none;
             user-select: none;
         }
         #header {
             flex: 0 0 56px;
             padding: 0 16px;
-            /* 아이폰 노치/상태바 영역 대응(안전 영역) 여백 추가 */
             padding-top: env(safe-area-inset-top);
             height: calc(56px + env(safe-area-inset-top));
             background: rgba(15,20,25,0.95);
@@ -98,7 +99,6 @@
         }
         #map { flex: 1; width: 100%; background: #1e293b; z-index: 1; }
 
-        /* 새로 추가된 GPS 내 위치 찾기 버튼 */
         #btn-my-location {
             position: absolute;
             bottom: 24px;
@@ -194,7 +194,6 @@
             align-items: center;
             gap: 10px;
         }
-        /* 영상 버퍼링용 스피너 */
         .video-loader {
             border: 3px solid rgba(255,255,255,0.1);
             border-top-color: var(--danger);
@@ -250,13 +249,13 @@
             overflow: hidden;
             transform: translate(-50%, -50%);
             pointer-events: none;
-            max-width: 120px;
+            max-width: 140px; /* CCTV 뱃지를 위해 너비 약간 증가 */
             z-index: 500;
             transition: transform 0.2s ease;
             will-change: transform;
             backface-visibility: hidden;
         }
-        .integrated-marker.zoom-small { font-size: 10px; max-width: 90px; }
+        .integrated-marker.zoom-small { font-size: 10px; max-width: 110px; }
         .integrated-marker.zoom-small .im-name { padding: 3px 6px; font-size: 10px; }
         .integrated-marker.zoom-small .im-weather { padding: 3px 6px; font-size: 10px; }
 
@@ -268,6 +267,9 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .im-weather {
             padding: 5px 10px;
@@ -363,8 +365,18 @@
             align-items: center;
             justify-content: center;
             border-bottom: 1px solid var(--panel);
+            overflow: hidden;
         }
-        .fav-play-icon { font-size: 18px; color: rgba(255,255,255,0.5); }
+        /* 즐겨찾기 독립 재생 비디오용 스타일 */
+        .fav-screen video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+        }
         .fav-live-tag {
             position: absolute; top: 5px; left: 5px;
             background: rgba(0,0,0,0.75);
@@ -374,6 +386,7 @@
             padding: 2px 5px;
             border-radius: 3px;
             border: 1px solid var(--danger);
+            z-index: 2;
         }
         .fav-name-tag {
             position: absolute; bottom: 5px; right: 5px;
@@ -382,6 +395,7 @@
             font-size: 10px;
             padding: 2px 5px;
             border-radius: 3px;
+            z-index: 2;
         }
         .fav-details {
             padding: 5px 8px;
@@ -592,19 +606,18 @@
 
         const CacheStore = {
             sidoGeoJSON: null, sigunguGeoJSON: null, cctvDataMap: new Map(),
-            weatherCache: new Map(), // [속도 최적화] 날씨 데이터 캐싱 추가
+            weatherCache: new Map(),
             purgeExpiredCCTVCache: function() {
                 const now = Date.now();
                 for (const [key, val] of this.cctvDataMap.entries()) {
                     if (now - val.timestamp > CONFIG.CCTV_CACHE_TTL) this.cctvDataMap.delete(key);
                 }
             },
-            // [속도 최적화] 동일/인접 구역의 중복 네트워크 호출을 막아 속도를 극대화하는 함수
             getWeather: async function(lat, lng) {
                 var key = lat.toFixed(1) + '_' + lng.toFixed(1);
                 var now = Date.now();
                 var cached = this.weatherCache.get(key);
-                if (cached && (now - cached.ts < 600000)) { // 10분 캐시 유지
+                if (cached && (now - cached.ts < 600000)) { 
                     return cached.data;
                 }
                 var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + lat.toFixed(3) + '&longitude=' + lng.toFixed(3) + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4500 });
@@ -617,7 +630,8 @@
         const State = {
             currentWeather: null, activeCCTV: null, isEditMode: false, syncInterval: null,
             currentFocusBounds: null, lastSearchName: null, fromSearch: false, parentSidoCode: null,
-            parentSidoName: null, parserWorker: null, hlsRetryCount: 0
+            parentSidoName: null, parserWorker: null, hlsRetryCount: 0,
+            currentCCTVs: [] // 현재 활성화된 CCTV 데이터 임시 보관용
         };
 
         const UI = {
@@ -746,6 +760,7 @@
         var App = {
             map: null, geoLayer: null, clusterGroup: null, infoLabelLayer: null,
             hlsInstance: null, currentLevel: 0, favorites: [], currentFocusBounds: null,
+            favHlsInstances: {}, // 하단 즐겨찾기 비디오 인스턴스 보관용
 
             init: async function() {
                 initDataWorker();
@@ -845,7 +860,6 @@
                 });
             },
 
-            // [속도 최적화] 로딩되는 순서대로 즉시 화면에 띄워 체감 속도 향상
             fetchLocalWeather: function(geoJsonLayer) {
                 this.infoLabelLayer.clearLayers();
                 var self = this;
@@ -856,6 +870,32 @@
                         var w = await CacheStore.getWeather(center.lat, center.lng);
                         self.renderIntegratedMarkers([{ status: 'fulfilled', value: { name: name, lat: center.lat, lng: center.lng, weather: w } }]);
                     } catch(e) {}
+                });
+            },
+
+            // [핵심 추가 3] 날씨 마커에 CCTV 여부를 뱃지로 표시
+            updateWeatherCCTVBadges: function() {
+                if (!State.currentCCTVs || State.currentCCTVs.length === 0) return;
+                this.infoLabelLayer.eachLayer(function(layer) {
+                    var lat = layer.getLatLng().lat;
+                    var lng = layer.getLatLng().lng;
+                    // 대략 15km 이내에 CCTV가 존재하는지 체크
+                    var hasCCTV = State.currentCCTVs.some(function(c) {
+                        return Math.abs(c.coordy - lat) < 0.15 && Math.abs(c.coordx - lng) < 0.15;
+                    });
+                    
+                    if (hasCCTV) {
+                        var el = layer.getElement();
+                        if (el) {
+                            var badge = el.querySelector('.im-cctv-badge');
+                            if (!badge) {
+                                var titleEl = el.querySelector('.im-name');
+                                if (titleEl) {
+                                    titleEl.innerHTML += ' <span class="im-cctv-badge" style="background:var(--success); color:#111; border-radius:3px; padding:1px 4px; font-size:9px; margin-left:4px; font-weight:900;">📷CCTV</span>';
+                                }
+                            }
+                        }
+                    }
                 });
             },
 
@@ -874,6 +914,7 @@
                         L.marker([res.value.lat, res.value.lng], { icon: icon, interactive: false }).addTo(self.infoLabelLayer);
                     }
                 });
+                setTimeout(function() { self.updateWeatherCCTVBadges(); }, 150);
             },
 
             showSearchWeatherMarker: async function(name, lat, lng) {
@@ -886,6 +927,9 @@
                         '</div>';
                     var icon = L.divIcon({ html: html, className: 'leaflet-div-icon-custom', iconSize: null });
                     L.marker([lat, lng], { icon: icon, interactive: false }).addTo(this.infoLabelLayer);
+                    
+                    var self = this;
+                    setTimeout(function() { self.updateWeatherCCTVBadges(); }, 150);
                 } catch (e) {}
             },
 
@@ -932,6 +976,16 @@
                 }
             },
 
+            // 하단 미니 플레이어 객체 소멸 함수 (메모리 최적화용)
+            clearFavVideos: function() {
+                for (var key in this.favHlsInstances) {
+                    if (this.favHlsInstances[key]) {
+                        this.favHlsInstances[key].destroy();
+                    }
+                }
+                this.favHlsInstances = {};
+            },
+
             loadFavorites: function() {
                 try {
                     var stored = localStorage.getItem('cctv_fav_v8');
@@ -971,19 +1025,57 @@
                 var self = this;
                 var bar = document.getElementById('bottom-bar');
                 bar.innerHTML = '';
+                
+                // 기존 재생 중이던 하단 비디오 자원 해제
+                this.clearFavVideos();
+
                 if (this.favorites.length === 0) {
                     bar.innerHTML = '<div class="empty-fav">등록된 채널이 없습니다</div>'; return;
                 }
                 this.favorites.forEach(function(fav) {
                     var card = document.createElement('div');
                     card.className = 'fav-card';
-                    card.onclick = function() { if (!State.isEditMode) self.executeDirectSearch(fav.name, fav.lat, fav.lng, true, fav.url); };
+                    card.onclick = function() { if (State.isEditMode) return; }; // 클릭 시 메인으로 가지 않음 (자체 재생됨)
+                    
+                    // [핵심 추가 2] 즐겨찾기 내부에 직접 재생되는 video 태그 삽입
                     card.innerHTML =
                         '<button class="fav-remove" onclick="App.removeFavorite(\'' + fav.id + '\', event)">삭제</button>' +
-                        '<div class="fav-screen"><div class="fav-live-tag">LIVE</div><div class="fav-play-icon">▶</div><div class="fav-name-tag">' + fav.name + '</div></div>' +
+                        '<div class="fav-screen">' +
+                            '<video id="fav-video-' + fav.id + '" autoplay muted playsinline></video>' +
+                            '<div class="fav-live-tag">LIVE</div>' +
+                            '<div class="fav-name-tag">' + fav.name + '</div>' +
+                        '</div>' +
                         '<div class="fav-details"><div class="fav-loc" title="' + fav.address + '">' + fav.address + '</div><div class="fav-weather" id="fav-w-' + fav.id + '"><span style="color:var(--muted)">대기</span></div></div>';
                     bar.appendChild(card);
                 });
+
+                // 각 카드 렌더링 후 영상 송출 시작
+                this.favorites.forEach(function(fav) {
+                    self.initFavVideo(fav.id, fav.url);
+                });
+            },
+
+            // 하단 미니 플레이어 전용 비디오 로드 함수
+            initFavVideo: function(id, url) {
+                if (!url) return;
+                var secureUrl = url.replace(/^http:\/\//i, 'https://'); // HTTP -> HTTPS 우회
+                var video = document.getElementById('fav-video-' + id);
+                if (!video) return;
+
+                if (Hls.isSupported()) {
+                    var hls = new Hls({ enableWorker: false, lowLatencyMode: true }); // 서브 영상이므로 메모리를 위해 워커 미사용
+                    hls.loadSource(secureUrl);
+                    hls.attachMedia(video);
+                    hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                        video.play().catch(function() {});
+                    });
+                    this.favHlsInstances[id] = hls;
+                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                    video.src = secureUrl;
+                    video.addEventListener('loadedmetadata', function() {
+                        video.play().catch(function() {});
+                    });
+                }
             },
 
             fetchFavoritesWeather: function() {
@@ -1029,7 +1121,6 @@
                 this.currentLevel = 1; State.fromSearch = false; State.parentSidoCode = null; State.parentSidoName = null;
                 UI.updateHeader('[' + name + '] 하위 구역 확인'); UI.resetWeatherWidget(); this.map.fitBounds(bounds);
                 
-                // [속도 최적화 1] 대량의 날씨 로딩 전에 CCTV 데이터 프록시 호출을 최우선으로 실행 (네트워크 큐 선점)
                 this.clearCCTVResources(); 
                 this.fetchActualCCTVData(bounds, true);
 
@@ -1038,8 +1129,6 @@
                     features: CacheStore.sigunguGeoJSON.features.filter(function(f) { return String(f.properties.code).indexOf(String(sidoCode)) === 0; })
                 };
                 this.renderGeoLayer(filtered, 2); 
-
-                // [속도 최적화 2] 렌더링을 차단하지 않도록 날씨 호출은 후순위 비동기로 실행
                 this.fetchLocalWeather(this.geoLayer);
             },
 
@@ -1047,7 +1136,6 @@
                 this.currentLevel = 2; State.fromSearch = false; this.currentFocusBounds = bounds; this.map.fitBounds(bounds);
                 UI.updateHeader('관측 대상: ' + name);
                 
-                // 순서 최적화
                 this.fetchActualCCTVData(bounds, false);
                 var center = bounds.getCenter();
                 this.fetchWeatherData(center.lat, center.lng); 
@@ -1133,7 +1221,9 @@
                 var cached = CacheStore.cctvDataMap.get(cacheKey);
 
                 if (cached && (Date.now() - cached.timestamp < CONFIG.CCTV_CACHE_TTL)) {
+                    State.currentCCTVs = cached.data;
                     this.renderCCTVDots(cached.data, autoPlay);
+                    this.updateWeatherCCTVBadges();
                     if (!isBroadSearch) UI.hideLoading(); return;
                 }
 
@@ -1155,8 +1245,10 @@
                         return;
                     }
 
+                    State.currentCCTVs = cctvDataArray;
                     CacheStore.cctvDataMap.set(cacheKey, { timestamp: Date.now(), data: cctvDataArray });
                     this.renderCCTVDots(cctvDataArray, autoPlay);
+                    this.updateWeatherCCTVBadges();
 
                 } catch (error) {
                     if (!isBroadSearch) UI.showToast('서버 응답 지연', '#ef4444');
@@ -1183,6 +1275,7 @@
                 this.clusterGroup.addLayers(markers);
             },
 
+            // 메인 뷰어 영상 재생
             playCCTVStream: function(streamUrl, cctvObj) {
                 var wrapper = document.getElementById('video-content'); var badge = document.getElementById('video-badge');
                 State.activeCCTV = cctvObj; State.hlsRetryCount = 0;
@@ -1192,15 +1285,18 @@
                 if (State.isEditMode) document.getElementById('btn-fav-add').style.display = 'inline-block';
                 if (this.hlsInstance) { this.hlsInstance.destroy(); this.hlsInstance = null; }
 
-                // 영상을 불러오는 동안 표시할 스피너 애니메이션 적용
                 wrapper.innerHTML = '<div class="placeholder"><div class="video-loader"></div><span>채널 연결 중...</span></div><video id="cctv-player" controls autoplay muted playsinline style="display:none;"></video>';
                 var video = document.getElementById('cctv-player');
                 var placeholder = wrapper.querySelector('.placeholder');
                 badge.innerText = '연결 중'; badge.className = 'video-badge';
 
+                // ★ 핵심 해결: HTTP 우회 변환
+                var secureStreamUrl = streamUrl.replace(/^http:\/\//i, 'https://');
+
                 if (Hls.isSupported()) {
                     this.hlsInstance = new Hls({ enableWorker: true, lowLatencyMode: true });
-                    this.hlsInstance.loadSource(streamUrl); this.hlsInstance.attachMedia(video);
+                    this.hlsInstance.loadSource(secureStreamUrl);
+                    this.hlsInstance.attachMedia(video);
                     this.hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
                         if (placeholder) placeholder.style.display = 'none';
                         video.style.display = 'block';
@@ -1231,7 +1327,7 @@
                         }
                     });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                    video.src = streamUrl;
+                    video.src = secureStreamUrl;
                     video.addEventListener('loadedmetadata', function() {
                         if (placeholder) placeholder.style.display = 'none';
                         video.style.display = 'block';
@@ -1245,7 +1341,11 @@
                 var wrapper = document.getElementById('video-content');
                 if (wrapper) {
                     var video = wrapper.querySelector('video');
-                    if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
+                    if (video) { 
+                        video.pause(); 
+                        video.removeAttribute('src'); 
+                        video.load(); 
+                    }
                     wrapper.innerHTML = '<div class="placeholder">지도 상의 인프라 마커(붉은 점) 또는<br>하단 채널을 선택하세요</div>';
                 }
                 if (this.clusterGroup) this.clusterGroup.clearLayers();
