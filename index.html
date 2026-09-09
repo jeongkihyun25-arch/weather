@@ -4,17 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <!-- 모바일 단독 앱(가젯) 모드 설정 -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CCTV관측">
     <meta name="theme-color" content="#0f1419">
     
-    <!-- 보안 차단(Mixed Content) 우회 강제 승격 -->
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     
-    <!-- PWA 아이콘 -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📡</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%230f1419%22/><text x=%2250%22 y=%2250%22 font-size=%2270%22 text-anchor=%22middle%22 dominant-baseline=%22central%22>📡</text></svg>">
 
@@ -22,12 +19,8 @@
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
-
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
     <style>
@@ -99,7 +92,6 @@
             background: #111;
         }
         
-        /* OSM 타일 다크모드 반전 필터 적용 (도로망 선명도 극대화) */
         .leaflet-tile-pane {
             filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
         }
@@ -286,18 +278,27 @@
             justify-content: center;
         }
         
+        /* ★ CCTV 마커 UI 시인성 대폭 강화 및 개별 점 표출 */
         .cctv-dot {
-            width: 14px; height: 14px;
-            background: var(--danger);
+            width: 16px; height: 16px;
+            background: #ff2a2a;
             border-radius: 50%;
-            border: 2px solid #fff;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+            border: 2.5px solid #ffffff;
+            box-shadow: 0 0 10px rgba(255, 42, 42, 0.9), 0 2px 4px rgba(0,0,0,0.6);
             cursor: pointer;
+            transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
             touch-action: manipulation; 
+        }
+        /* 현재 재생 중인 CCTV 마커는 초록색으로 강조 */
+        .cctv-dot.active {
+            background: var(--success);
+            box-shadow: 0 0 15px var(--success), 0 3px 6px rgba(0,0,0,0.6);
+            transform: scale(1.3);
+            z-index: 1000 !important;
         }
 
         #bottom-panel {
-            flex: 0 0 190px; /* 즐겨찾기 높이 확대 */
+            flex: 0 0 190px;
             background: #0c1017;
             border-top: 1px solid var(--border);
             display: flex;
@@ -349,8 +350,8 @@
         #bottom-bar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
         
         .fav-card {
-            flex: 0 0 220px; /* 가로폭 확대 */
-            height: 140px;   /* 세로폭 확대 */
+            flex: 0 0 220px;
+            height: 140px;
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: 10px;
@@ -364,7 +365,7 @@
         }
         .fav-card:active { border-color: var(--success); }
         .fav-screen {
-            height: 85px; /* 영상 화면 크기 확대 */
+            height: 85px;
             background: #000;
             position: relative;
             display: flex;
@@ -591,7 +592,7 @@
                 SIGUNGU_GEOJSON: 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_municipalities_geo_simple.json',
                 WEATHER: 'https://api.open-meteo.com/v1/forecast',
                 GEOCODE: 'https://nominatim.openstreetmap.org/reverse',
-                // 상세 도로망이 보이는 오픈스트리트맵(OSM) 베이스 사용 - CSS로 다크모드 반전 적용됨
+                // 도로망이 완벽히 보이는 OpenStreetMap 교체 (CSS 다크 필터 연동)
                 MAP_TILE: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
             },
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
@@ -633,7 +634,7 @@
             }
         };
 
-        // ★ CCTV 위치 영구 메모리 객체 (한 번 확인된 CCTV 반경을 기억하여 앱을 켤 때마다 자동 뱃지 생성)
+        // 영구 그리드 메모리: 이전 로딩했던 CCTV 위치를 기억해 뱃지 출력 최적화
         const CCTVMemory = {
             grids: new Set(JSON.parse(localStorage.getItem('cctv_grids_v3') || '[]')),
             add: function(lat, lng) {
@@ -785,7 +786,7 @@
         }
 
         var App = {
-            map: null, geoLayer: null, clusterGroup: null, infoLabelLayer: null,
+            map: null, geoLayer: null, infoLabelLayer: null, cctvLayer: null,
             hlsInstance: null, currentLevel: 0, favorites: [], currentFocusBounds: null,
             favHlsInstances: {},
 
@@ -808,7 +809,8 @@
                 L.tileLayer(CONFIG.API.MAP_TILE, { attribution: '© OSM', maxZoom: 18, updateWhenIdle: true, keepBuffer: 2 }).addTo(this.map);
                 L.control.zoom({ position: 'bottomright' }).addTo(this.map);
 
-                this.clusterGroup = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 50, disableClusteringAtZoom: 13 }).addTo(this.map);
+                // [클러스터링 제거] 독립된 레이어로 바로 노출되도록 변경
+                this.cctvLayer = L.featureGroup().addTo(this.map);
                 this.infoLabelLayer = L.layerGroup().addTo(this.map);
 
                 var self = this;
@@ -900,7 +902,6 @@
                 });
             },
 
-            // ★ CCTVMemory 객체를 사용해 기억된 내역이 있으면 뱃지를 무조건 표시
             updateWeatherCCTVBadges: function() {
                 this.infoLabelLayer.eachLayer(function(layer) {
                     var lat = layer.getLatLng().lat;
@@ -1128,9 +1129,7 @@
                     style: { color: targetLevel === 1 ? '#3b82f6' : '#a855f7', weight: targetLevel === 1 ? 2 : 1.5, fillOpacity: 0.06 },
                     onEachFeature: function(feature, layer) {
                         layer.on('click', function(e) {
-                            // ★ 오작동 차단: CCTV가 로드된 상태(Level 2)에서는 뒤로가기(빈 공간 터치) 무시
-                            if (self.currentLevel === 2) return; 
-                            
+                            // ★ 네비게이션 복구: 어느 상황에서든 자유롭게 다른 구역 폴리곤을 클릭하여 즉시 이동 가능
                             if (targetLevel === 1) self.handleSidoClick(feature.properties.code, feature.properties.name, layer.getBounds());
                             else self.handleSigunguClick(feature.properties.name, layer.getBounds());
                         });
@@ -1143,8 +1142,9 @@
                 UI.updateHeader('[' + name + '] 하위 구역 확인'); UI.resetWeatherWidget(); this.map.fitBounds(bounds);
                 
                 this.clearCCTVResources(); 
-                // 해당 도 단위의 CCTV 데이터를 사전에 가져와 메모리에 적재 (이후 뱃지 표시에 즉시 활용)
-                this.fetchActualCCTVData(bounds, true);
+
+                // ★ 서울 등 도/시 단위 클릭 시, 전체 범위의 CCTV를 즉시 호출하여 지도상에 선명한 단일 마커로 전부 뿌림
+                this.fetchActualCCTVData(bounds, false);
 
                 var filtered = {
                     type: CacheStore.sigunguGeoJSON.type,
@@ -1233,10 +1233,10 @@
                 } catch (e) { UI.showToast('기상 수신 실패', '#ef4444'); }
             },
 
-            fetchActualCCTVData: async function(bounds, isBroadSearch, attempt, autoPlay) {
-                isBroadSearch = isBroadSearch || false; attempt = attempt || 1; autoPlay = autoPlay || false;
-                if (!isBroadSearch) this.clearCCTVResources();
-                if (!isBroadSearch) UI.showLoading('인프라 좌표 렌더링');
+            fetchActualCCTVData: async function(bounds, autoPlay) {
+                autoPlay = autoPlay || false;
+                this.clearCCTVResources();
+                UI.showLoading('인프라 좌표 렌더링');
 
                 CacheStore.purgeExpiredCCTVCache();
                 var cacheKey = bounds.getWest().toFixed(2) + '_' + bounds.getEast().toFixed(2) + '_' + bounds.getSouth().toFixed(2) + '_' + bounds.getNorth().toFixed(2);
@@ -1246,59 +1246,67 @@
                     State.currentCCTVs = cached.data;
                     this.renderCCTVDots(cached.data, autoPlay);
                     this.updateWeatherCCTVBadges();
-                    if (!isBroadSearch) UI.hideLoading(); return;
+                    UI.hideLoading(); return;
                 }
 
-                var center = bounds.getCenter(); var padVal = attempt === 1 ? 0.07 : 0.14;
-                var minX = (center.lng - padVal).toFixed(5); var maxX = (center.lng + padVal).toFixed(5);
-                var minY = (center.lat - padVal).toFixed(5); var maxY = (center.lat + padVal).toFixed(5);
+                // ★ 여유있는 범위(실제 폴리곤 크기 기반)로 API 요청하여 누락 차단
+                var padX = (bounds.getEast() - bounds.getWest()) * 0.05;
+                var padY = (bounds.getNorth() - bounds.getSouth()) * 0.05;
+                var minX = (bounds.getWest() - padX).toFixed(5);
+                var maxX = (bounds.getEast() + padX).toFixed(5);
+                var minY = (bounds.getSouth() - padY).toFixed(5);
+                var maxY = (bounds.getNorth() + padY).toFixed(5);
 
                 var q = '?apiKey=' + CONFIG.API.ITS_KEY + '&type=ex&cctvType=1&minX=' + minX + '&maxX=' + maxX + '&minY=' + minY + '&maxY=' + maxY + '&getType=json';
 
                 try {
                     var proxyUrl = CONFIG.API.PROXY_BASE + encodeURIComponent(CONFIG.API.ITS_BASE + q);
-                    var res = await fetchWithTimeout(proxyUrl, { timeout: 6000 });
+                    var res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
                     var rawData = await res.text();
                     var cctvDataArray = await parseITSDataAsync(rawData);
 
                     if (!cctvDataArray || cctvDataArray.length === 0) {
-                        if (attempt === 1 && !isBroadSearch) return this.fetchActualCCTVData(bounds, false, 2, autoPlay);
-                        if (!isBroadSearch) UI.showToast('해당 반경 가용 채널 없음', '#ef4444');
+                        UI.showToast('해당 구역 가용 채널 없음', '#ef4444');
                         return;
                     }
 
-                    // 발견된 모든 CCTV 좌표를 영구 메모리에 저장
                     cctvDataArray.forEach(function(c) { CCTVMemory.add(c.coordy, c.coordx); });
                     
                     State.currentCCTVs = cctvDataArray;
                     CacheStore.cctvDataMap.set(cacheKey, { timestamp: Date.now(), data: cctvDataArray });
                     
-                    if (!isBroadSearch) this.renderCCTVDots(cctvDataArray, autoPlay);
+                    this.renderCCTVDots(cctvDataArray, autoPlay);
                     this.updateWeatherCCTVBadges();
 
                 } catch (error) {
-                    if (!isBroadSearch) UI.showToast('서버 응답 지연', '#ef4444');
+                    UI.showToast('서버 응답 지연', '#ef4444');
                 } finally { UI.hideLoading(); }
             },
 
+            // ★ 개별 마커 출력 방식 & 시인성 및 활성화 효과 추가
             renderCCTVDots: function(cctvArray, autoPlay) {
-                autoPlay = autoPlay || false; var self = this; var markers = [];
-                var dotIcon = L.divIcon({ className: 'cctv-dot', iconSize: [14, 14] });
+                autoPlay = autoPlay || false; var self = this;
 
                 cctvArray.forEach(function(cctv, i) {
+                    var dotIcon = L.divIcon({ className: 'cctv-dot', iconSize: [16, 16] });
                     var marker = L.marker([cctv.coordy, cctv.coordx], { icon: dotIcon });
                     marker.bindPopup('<b>[CCTV] ' + cctv.cctvname + '</b>');
-                    marker.on('click', function() {
+                    
+                    marker.on('click', function(e) {
+                        // 클릭된 마커를 초록색(Active) 상태로 변경
+                        document.querySelectorAll('.cctv-dot').forEach(el => el.classList.remove('active'));
+                        if (e.target._icon) e.target._icon.classList.add('active');
+
                         document.getElementById('video-title').innerText = '[송출] ' + cctv.cctvname;
                         self.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
                     });
-                    markers.push(marker);
+                    
+                    self.cctvLayer.addLayer(marker);
+
                     if (autoPlay && i === 0) {
-                        document.getElementById('video-title').innerText = '[송출] ' + cctv.cctvname;
-                        self.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
+                        marker.fire('click');
                     }
                 });
-                this.clusterGroup.addLayers(markers);
             },
 
             playCCTVStream: function(streamUrl, cctvObj) {
@@ -1372,7 +1380,7 @@
                     }
                     wrapper.innerHTML = '<div class="placeholder">지도 상의 인프라 마커(붉은 점) 또는<br>하단 채널을 선택하세요</div>';
                 }
-                if (this.clusterGroup) this.clusterGroup.clearLayers();
+                if (this.cctvLayer) this.cctvLayer.clearLayers();
                 var badge = document.getElementById('video-badge');
                 if (badge) { badge.innerText = '대기'; badge.className = 'video-badge'; }
                 State.activeCCTV = null; 
