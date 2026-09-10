@@ -82,7 +82,7 @@
         }
         .btn-group button:active { background: var(--border); }
 
-        /* ★ 새로 추가된 관심 지역(Quick Bar) 스타일 */
+        /* 관심 지역(Quick Bar) 퀵버튼 스타일 */
         #quick-bar {
             flex: 0 0 auto;
             background: var(--panel);
@@ -130,9 +130,6 @@
             background: #111;
         }
         
-        .leaflet-tile-pane {
-            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
-        }
         #map { flex: 1; width: 100%; z-index: 1; background: transparent; }
 
         #btn-my-location {
@@ -173,7 +170,7 @@
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 14px;
-            transition: background 0.3s ease;
+            transition: background 0.3s ease, border-color 0.3s ease;
         }
         .widget-header {
             font-size: 11px;
@@ -183,32 +180,32 @@
             justify-content: space-between;
             align-items: center;
             padding-bottom: 6px;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         }
-        /* 관심지역 등록 버튼 */
         #btn-save-region {
-            background: rgba(255,255,255,0.1);
-            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.2);
             color: #fff;
-            padding: 3px 8px;
-            border-radius: 4px;
+            padding: 4px 10px;
+            border-radius: 6px;
             font-size: 10px;
             font-weight: bold;
             cursor: pointer;
             margin-right: 8px;
+            transition: background 0.2s;
         }
         #btn-save-region:active { background: var(--accent); }
 
         .weather-main {
             font-size: 20px;
             font-weight: 700;
-            color: var(--accent2);
+            color: #fff;
             margin-bottom: 6px;
             display: flex;
             align-items: center;
             gap: 8px;
         }
-        .weather-sub { font-size: 13px; line-height: 1.5; }
+        .weather-sub { font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.9); }
 
         #video-wrapper {
             flex: 1;
@@ -289,6 +286,7 @@
 
         .leaflet-div-icon-custom { background: transparent; border: none; pointer-events: none !important; }
         
+        /* 날씨별 색상 테마가 적용되는 마커 */
         .integrated-marker {
             background: rgba(26,35,50,0.92);
             color: #fff;
@@ -302,7 +300,7 @@
             pointer-events: none;
             max-width: 140px; 
             z-index: 500;
-            transition: transform 0.2s ease;
+            transition: transform 0.2s ease, background-color 0.3s ease, border-color 0.3s ease;
             will-change: transform;
             backface-visibility: hidden;
         }
@@ -312,9 +310,9 @@
 
         .im-name {
             font-weight: 800;
-            background: rgba(0,0,0,0.35);
+            background: rgba(0,0,0,0.4);
             padding: 5px 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid rgba(255,255,255,0.15);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -332,10 +330,10 @@
         }
         
         .cctv-dot {
-            width: 16px; height: 16px;
+            width: 14px; height: 14px;
             background: #ff2a2a;
             border-radius: 50%;
-            border: 2.5px solid #ffffff;
+            border: 2px solid #ffffff;
             box-shadow: 0 0 10px rgba(255, 42, 42, 0.9), 0 2px 4px rgba(0,0,0,0.6);
             cursor: pointer;
             transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
@@ -344,7 +342,7 @@
         .cctv-dot.active {
             background: var(--success);
             box-shadow: 0 0 15px var(--success), 0 3px 6px rgba(0,0,0,0.6);
-            transform: scale(1.3);
+            transform: scale(1.4);
             z-index: 1000 !important;
         }
 
@@ -412,9 +410,9 @@
             cursor: pointer;
             position: relative;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-            transition: border-color 0.2s;
+            transition: border-color 0.3s ease, background-color 0.3s ease;
         }
-        .fav-card:active { border-color: var(--success); }
+        .fav-card:active { border-color: var(--success) !important; }
         .fav-screen {
             height: 85px;
             background: #000;
@@ -422,7 +420,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            border-bottom: 1px solid var(--panel);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
             overflow: hidden;
         }
         .fav-screen video {
@@ -456,7 +454,6 @@
         }
         .fav-details {
             padding: 6px 10px;
-            background: var(--panel);
             flex: 1;
             display: flex;
             flex-direction: column;
@@ -464,7 +461,7 @@
         }
         .fav-loc {
             font-size: 11px;
-            color: var(--muted);
+            color: rgba(255,255,255,0.8);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -476,6 +473,7 @@
             display: flex;
             align-items: center;
             gap: 4px;
+            color: #fff;
         }
         .fav-remove {
             display: none;
@@ -585,11 +583,10 @@
         </div>
     </div>
     
-    <!-- ★ 관심 지역 퀵바 -->
     <div id="quick-bar">
         <div style="font-size:11px; color:var(--muted); padding-top:4px; padding-right:8px;">관심 지역:</div>
         <div id="quick-chips-container" style="display:flex; gap:6px;">
-            <!-- 칩들이 여기에 렌더링 됨 -->
+            <!-- 관심 지역 칩 렌더링 -->
         </div>
     </div>
 
@@ -606,10 +603,10 @@
         <div id="side-panel">
             <div id="weather-widget">
                 <div class="widget-header">
-                    <span>거점 기상 관측망</span>
+                    <span style="color:rgba(255,255,255,0.7);">거점 기상 관측망</span>
                     <div style="display:flex; align-items:center;">
                         <button id="btn-save-region" onclick="App.saveCurrentRegion()">⭐ 관심지역 등록</button>
-                        <span id="weather-time">-</span>
+                        <span id="weather-time" style="color:rgba(255,255,255,0.7);">-</span>
                     </div>
                 </div>
                 <div class="weather-main" id="weather-condition">대기</div>
@@ -661,7 +658,8 @@
                 SIGUNGU_GEOJSON: 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_municipalities_geo_simple.json',
                 WEATHER: 'https://api.open-meteo.com/v1/forecast',
                 GEOCODE: 'https://nominatim.openstreetmap.org/reverse',
-                MAP_TILE: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+                // ★ 한국 고해상도 VWorld Midnight (골목길/도로망/건물명 선명 표출)
+                MAP_TILE: 'https://xdworld.vworld.kr/2d/midnight/service/{z}/{x}/{y}.png'
             },
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
             TIMEOUT: 12000,
@@ -702,13 +700,14 @@
             }
         };
 
+        // 영구 그리드 메모리: CCTV 위치를 폰에 영원히 기억하여 뱃지가 안 뜨는 누락 현상 원천 차단
         const CCTVMemory = {
-            grids: new Set(JSON.parse(localStorage.getItem('cctv_grids_v3') || '[]')),
+            grids: new Set(JSON.parse(localStorage.getItem('cctv_grids_v4') || '[]')),
             add: function(lat, lng) {
                 const key = Math.floor(lat * 10) + '_' + Math.floor(lng * 10);
                 if (!this.grids.has(key)) {
                     this.grids.add(key);
-                    localStorage.setItem('cctv_grids_v3', JSON.stringify(Array.from(this.grids)));
+                    localStorage.setItem('cctv_grids_v4', JSON.stringify(Array.from(this.grids)));
                 }
             },
             hasNearby: function(lat, lng) {
@@ -726,9 +725,9 @@
             currentWeather: null, activeCCTV: null, isEditMode: false, syncInterval: null,
             currentFocusBounds: null, lastSearchName: null, fromSearch: false, parentSidoCode: null,
             parentSidoName: null, parserWorker: null, hlsRetryCount: 0,
-            currentCCTVs: [],
+            currentCCTVs: [], nationwideCCTVs: [],
             cctvClickTimer: null,
-            savedRegions: JSON.parse(localStorage.getItem('saved_regions_v1') || '[]') // 관심 지역 데이터
+            savedRegions: JSON.parse(localStorage.getItem('cctv_saved_regions_v3') || '[]')
         };
 
         const UI = {
@@ -838,18 +837,19 @@
             } catch (e) { return '지오코딩 연동 지연'; }
         }
 
+        // ★ 날씨 상태별 시각적 테마 컬러 매핑 (직관적인 UI)
         function parseWeather(code) {
-            var icon = '☀️', text = '맑음', color = '#22c55e', bg = '#1e293b', rain = '정상';
-            if ([1,2,3].indexOf(code) !== -1) { icon = '☁️'; text = '흐림'; color = '#94a3b8'; }
-            else if ([45,48].indexOf(code) !== -1) { icon = '🌫️'; text = '안개'; color = '#94a3b8'; }
+            var icon = '☀️', text = '맑음', color = '#38bdf8', bg = '#0f172a', rain = '정상';
+            if ([1,2,3].indexOf(code) !== -1) { icon = '☁️'; text = '흐림'; color = '#94a3b8'; bg = '#1e293b'; }
+            else if ([45,48].indexOf(code) !== -1) { icon = '🌫️'; text = '안개'; color = '#94a3b8'; bg = '#1e293b'; }
             else if ([51,53,55,56,57,61,63,65,66,67,80,81,82].indexOf(code) !== -1) {
-                icon = '🌧️'; text = '강우'; color = '#ef4444'; bg = '#3f1d1d'; rain = '강우 감지';
+                icon = '🌧️'; text = '강우'; color = '#3b82f6'; bg = '#1e3a8a'; rain = '강우 감지';
             }
             else if ([71,73,75,77].indexOf(code) !== -1) {
-                icon = '❄️'; text = '강설'; color = '#3b82f6'; bg = '#1e3a5f'; rain = '강설 감지';
+                icon = '❄️'; text = '강설'; color = '#c084fc'; bg = '#4c1d95'; rain = '강설 감지';
             }
             else if ([95,96,99].indexOf(code) !== -1) {
-                icon = '⚡'; text = '폭우/낙뢰'; color = '#dc2626'; bg = '#450a0a'; rain = '위험 기상';
+                icon = '⚡'; text = '폭우/낙뢰'; color = '#ef4444'; bg = '#7f1d1d'; rain = '위험 기상';
             }
             return { icon: icon, text: text, color: color, bg: bg, rain: rain };
         }
@@ -865,20 +865,22 @@
                 this.initGeocoder();
                 this.initResizeListener();
                 this.loadFavorites();
-                this.renderSavedRegions(); // 관심지역 렌더링
+                this.renderSavedRegions(); 
                 await this.loadSpatialData();
                 this.fetchGlobalWeather();
+                
+                // ★ 앱 시작 즉시 전국 단위 CCTV 백그라운드 스크래핑 및 표출
+                this.fetchNationwideCCTV();
                 this.startAutoSync();
             },
 
             initMap: function() {
-                // ★ 성능 최적화: 불필요한 페이드/줌 애니메이션 비활성화로 터치 즉시 즉각 반응하도록 설정
                 this.map = L.map('map', {
                     center: [35.8, 127.5], zoom: 7, minZoom: 7, maxBounds: CONFIG.BOUNDS,
                     zoomControl: false, renderer: L.canvas(),
                     fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false
                 });
-                L.tileLayer(CONFIG.API.MAP_TILE, { attribution: '© OSM', maxZoom: 18, updateWhenIdle: true, keepBuffer: 2 }).addTo(this.map);
+                L.tileLayer(CONFIG.API.MAP_TILE, { attribution: '© VWorld', maxZoom: 18, updateWhenIdle: true, keepBuffer: 2 }).addTo(this.map);
                 L.control.zoom({ position: 'bottomright' }).addTo(this.map);
 
                 this.cctvLayer = L.featureGroup().addTo(this.map);
@@ -977,7 +979,9 @@
                 this.infoLabelLayer.eachLayer(function(layer) {
                     var lat = layer.getLatLng().lat;
                     var lng = layer.getLatLng().lng;
-                    var hasCCTV = CCTVMemory.hasNearby(lat, lng);
+                    var hasCCTV = CCTVMemory.hasNearby(lat, lng) || State.currentCCTVs.some(function(c) {
+                        return Math.abs(c.coordy - lat) < 0.15 && Math.abs(c.coordx - lng) < 0.15;
+                    });
                     
                     if (hasCCTV) {
                         var el = layer.getElement();
@@ -994,6 +998,7 @@
                 });
             },
 
+            // ★ 날씨 컬러 테마가 적용되도록 마커 렌더링 수정
             renderIntegratedMarkers: function(resultsSettled) {
                 var self = this;
                 var isSmall = this.map.getZoom() < 8 ? 'zoom-small' : '';
@@ -1001,7 +1006,7 @@
                     if (res.status === 'fulfilled') {
                         var w = res.value.weather;
                         var p = parseWeather(w.weathercode);
-                        var html = '<div class="integrated-marker ' + isSmall + '" style="border-color:' + p.color + '">' +
+                        var html = '<div class="integrated-marker ' + isSmall + '" style="border-color:' + p.color + '; background-color:' + p.bg + ';">' +
                             '<div class="im-name">' + res.value.name + '</div>' +
                             '<div class="im-weather"><span style="font-size:14px">' + p.icon + '</span> ' + w.temperature + '℃</div>' +
                             '</div>';
@@ -1016,7 +1021,7 @@
                 try {
                     var w = await CacheStore.getWeather(lat, lng);
                     var p = parseWeather(w.weathercode);
-                    var html = '<div class="integrated-marker" style="border-color:' + p.color + '">' +
+                    var html = '<div class="integrated-marker" style="border-color:' + p.color + '; background-color:' + p.bg + ';">' +
                         '<div class="im-name">' + name + '</div>' +
                         '<div class="im-weather"><span style="font-size:14px">' + p.icon + '</span> ' + w.temperature + '℃</div>' +
                         '</div>';
@@ -1028,9 +1033,10 @@
                 } catch (e) {}
             },
 
-            // ★ 관심 지역 기능 추가
+            // 관심 지역 기능
             renderSavedRegions: function() {
                 var container = document.getElementById('quick-chips-container');
+                if(!container) return;
                 container.innerHTML = '';
                 var self = this;
                 State.savedRegions.forEach(function(region) {
@@ -1040,7 +1046,6 @@
                     chip.onclick = function() { self.executeDirectSearch(region.name, region.lat, region.lng); };
                     container.appendChild(chip);
                 });
-                // 저장된 관심지역이 없으면 바를 숨김 처리할 수도 있으나 접근성을 위해 남겨둠
             },
 
             saveCurrentRegion: function() {
@@ -1051,14 +1056,13 @@
                 var center = State.currentFocusBounds.getCenter();
                 var name = State.lastSearchName;
                 
-                // 중복 확인
                 if (State.savedRegions.find(r => r.name === name)) {
                     UI.showToast('이미 등록된 관심 지역입니다', '#f59e0b');
                     return;
                 }
                 
                 State.savedRegions.push({ name: name, lat: center.lat, lng: center.lng });
-                localStorage.setItem('saved_regions_v1', JSON.stringify(State.savedRegions));
+                localStorage.setItem('cctv_saved_regions_v3', JSON.stringify(State.savedRegions));
                 this.renderSavedRegions();
                 UI.showToast('[' + name + '] 관심 지역 등록 완료', '#22c55e');
             },
@@ -1066,7 +1070,7 @@
             removeSavedRegion: function(name, event) {
                 event.stopPropagation();
                 State.savedRegions = State.savedRegions.filter(r => r.name !== name);
-                localStorage.setItem('saved_regions_v1', JSON.stringify(State.savedRegions));
+                localStorage.setItem('cctv_saved_regions_v3', JSON.stringify(State.savedRegions));
                 this.renderSavedRegions();
             },
 
@@ -1164,13 +1168,13 @@
                 
                 this.clearFavVideos();
 
-                // ★ 안내 문구 직관적으로 개선
                 if (this.favorites.length === 0) {
                     bar.innerHTML = '<div class="empty-fav">⭐ <b>등록된 채널이 없습니다.</b><br>지도에서 🔴CCTV 선택 후 우측 상단의 <b>[채널 등록]</b> 버튼을 눌러주세요.</div>'; return;
                 }
                 this.favorites.forEach(function(fav) {
                     var card = document.createElement('div');
                     card.className = 'fav-card';
+                    card.id = 'fav-card-' + fav.id;
                     card.onclick = function() { if (State.isEditMode) return; }; 
                     
                     card.innerHTML =
@@ -1211,6 +1215,7 @@
                 }
             },
 
+            // ★ 즐겨찾기 목록 내의 날씨별 컬러 테마 적용
             fetchFavoritesWeather: function() {
                 this.favorites.forEach(async function(fav) {
                     try {
@@ -1218,6 +1223,12 @@
                         var p = parseWeather(w.weathercode);
                         var el = document.getElementById('fav-w-' + fav.id);
                         if (el) el.innerHTML = '<span style="color:' + p.color + '">' + p.icon + '</span> ' + w.temperature + '℃';
+                        
+                        var card = document.getElementById('fav-card-' + fav.id);
+                        if(card) {
+                            card.style.backgroundColor = p.bg;
+                            card.style.borderColor = p.color;
+                        }
                     } catch (e) {}
                 });
             },
@@ -1243,6 +1254,7 @@
                     style: { color: targetLevel === 1 ? '#3b82f6' : '#a855f7', weight: targetLevel === 1 ? 2 : 1.5, fillOpacity: 0.06 },
                     onEachFeature: function(feature, layer) {
                         layer.on('click', function(e) {
+                            // 주변 구역을 자연스럽게 클릭하여 넘어갈 수 있도록 수정 (네비게이션 100% 개방)
                             if (targetLevel === 1) self.handleSidoClick(feature.properties.code, feature.properties.name, layer.getBounds());
                             else self.handleSigunguClick(feature.properties.name, layer.getBounds());
                         });
@@ -1250,12 +1262,31 @@
                 }).addTo(this.map);
             },
 
+            // ★ 앱 켜지자마자 전국 단위 고속도로 CCTV 전부 뿌려주는 함수
+            fetchNationwideCCTV: async function() {
+                try {
+                    var q = '?apiKey=' + CONFIG.API.ITS_KEY + '&type=ex&cctvType=1&minX=124.0&maxX=132.0&minY=33.0&maxY=39.0&getType=json';
+                    var proxyUrl = CONFIG.API.PROXY_BASE + encodeURIComponent(CONFIG.API.ITS_BASE + q);
+                    var res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
+                    var rawData = await res.text();
+                    var cctvDataArray = await parseITSDataAsync(rawData);
+                    
+                    if (cctvDataArray && cctvDataArray.length > 0) {
+                        State.nationwideCCTVs = cctvDataArray;
+                        cctvDataArray.forEach(function(c) { CCTVMemory.add(c.coordy, c.coordx); });
+                        if (this.currentLevel === 0) {
+                            this.renderCCTVDots(cctvDataArray, false);
+                        }
+                    }
+                } catch(e) {}
+            },
+
             handleSidoClick: async function(sidoCode, name, bounds) {
-                this.currentLevel = 1; State.fromSearch = false; State.parentSidoCode = null; State.parentSidoName = null; State.lastSearchName = name;
+                this.currentLevel = 1; State.fromSearch = false; State.parentSidoCode = null; State.parentSidoName = null; 
+                State.lastSearchName = name; this.currentFocusBounds = bounds;
                 UI.updateHeader('[' + name + '] 하위 구역 확인'); UI.resetWeatherWidget(); this.map.fitBounds(bounds);
                 
                 this.clearCCTVResources(); 
-
                 this.fetchActualCCTVData(bounds, false);
 
                 var filtered = {
@@ -1267,7 +1298,9 @@
             },
 
             handleSigunguClick: function(name, bounds) {
-                this.currentLevel = 2; State.fromSearch = false; this.currentFocusBounds = bounds; State.lastSearchName = name; this.map.fitBounds(bounds);
+                this.currentLevel = 2; State.fromSearch = false; 
+                this.currentFocusBounds = bounds; State.lastSearchName = name; 
+                this.map.fitBounds(bounds);
                 UI.updateHeader('관측 대상: ' + name);
                 
                 this.fetchActualCCTVData(bounds, false);
@@ -1328,6 +1361,7 @@
                 } else { this.fetchActualCCTVData(this.currentFocusBounds, false, 1, autoPlay); }
             },
 
+            // ★ 기상 위젯 창에 날씨별 시각적 테마 컬러 적용
             fetchWeatherData: async function(lat, lon) {
                 var widget = document.getElementById('weather-widget'); widget.style.display = 'block';
                 document.getElementById('weather-condition').innerText = '분석 중';
@@ -1336,6 +1370,7 @@
                     State.currentWeather = w;
                     var now = new Date(); var p = parseWeather(w.weathercode);
                     widget.style.backgroundColor = p.bg;
+                    widget.style.borderColor = p.color;
                     document.getElementById('weather-time').innerText = '시각: ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
                     document.getElementById('weather-condition').innerHTML = p.icon + ' <span style="color:' + p.color + '">' + p.text + '</span>';
                     document.getElementById('weather-temp').innerText = '온도: ' + w.temperature + '℃';
@@ -1392,7 +1427,6 @@
                 } finally { UI.hideLoading(); }
             },
 
-            // ★ 디바운싱(연타 방지) 기술 적용
             renderCCTVDots: function(cctvArray, autoPlay) {
                 autoPlay = autoPlay || false; var self = this;
 
@@ -1410,7 +1444,7 @@
 
                             document.getElementById('video-title').innerText = '[송출] ' + cctv.cctvname;
                             self.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
-                        }, 250); // 0.25초 딜레이
+                        }, 250);
                     });
                     
                     self.cctvLayer.addLayer(marker);
@@ -1429,7 +1463,6 @@
                 document.getElementById('btn-fullscreen').style.display = 'inline-block';
                 if (State.isEditMode) document.getElementById('btn-fav-add').style.display = 'inline-block';
                 
-                // ★ 비디오 교체 시 이전 다운로드를 강제로 완벽하게 끊어 메모리 초과/프리징 방지
                 if (this.hlsInstance) { 
                     this.hlsInstance.stopLoad();
                     this.hlsInstance.detachMedia();
@@ -1533,11 +1566,15 @@
                         UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
                         this.renderGeoLayer(CacheStore.sidoGeoJSON, 1);
                         this.fetchGlobalWeather(); this.map.setView([35.8, 127.5], 7);
+                        // ★ 초기 화면 복귀 시 전국망 데이터 재렌더링
+                        if(State.nationwideCCTVs.length > 0) this.renderCCTVDots(State.nationwideCCTVs, false);
                     }
                 } else if (this.currentLevel === 1) {
                     this.currentLevel = 0; UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
                     this.renderGeoLayer(CacheStore.sidoGeoJSON, 1);
                     this.fetchGlobalWeather(); this.map.setView([35.8, 127.5], 7);
+                    // ★ 초기 화면 복귀 시 전국망 데이터 재렌더링
+                    if(State.nationwideCCTVs.length > 0) this.renderCCTVDots(State.nationwideCCTVs, false);
                 }
             },
 
