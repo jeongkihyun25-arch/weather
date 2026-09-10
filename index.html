@@ -4,17 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <!-- 모바일 단독 앱(가젯) 모드 활성화를 위한 설정 -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CCTV관측">
     <meta name="theme-color" content="#0f1419">
     
-    <!-- ★ 핵심 추가: HTTP 영상 리소스를 HTTPS로 강제 승격하여 보안 차단(Mixed Content) 우회 -->
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     
-    <!-- 바탕화면 설치 시 표시될 아이콘 (레이더 이모지) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📡</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%230f1419%22/><text x=%2250%22 y=%2250%22 font-size=%2270%22 text-anchor=%22middle%22 dominant-baseline=%22central%22>📡</text></svg>">
 
@@ -58,7 +55,6 @@
             padding-top: env(safe-area-inset-top);
             height: calc(56px + env(safe-area-inset-top));
             background: rgba(15,20,25,0.95);
-            border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -70,7 +66,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 58vw;
+            max-width: 55vw;
         }
         .btn-group { display: flex; gap: 8px; }
         .btn-group button {
@@ -85,6 +81,44 @@
             transition: background 0.2s;
         }
         .btn-group button:active { background: var(--border); }
+
+        /* ★ 새로 추가된 관심 지역(Quick Bar) 스타일 */
+        #quick-bar {
+            flex: 0 0 auto;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            border-top: 1px solid var(--border);
+            padding: 8px 14px;
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            white-space: nowrap;
+            z-index: 15;
+        }
+        #quick-bar::-webkit-scrollbar { display: none; }
+        .quick-chip {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            padding: 5px 12px;
+            border-radius: 14px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .quick-chip:active { background: var(--card); border-color: var(--accent); }
+        .quick-chip-remove {
+            color: var(--danger);
+            margin-left: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            line-height: 1;
+        }
 
         #content { display: flex; flex: 1; min-height: 0; }
         #map-container {
@@ -147,9 +181,24 @@
             margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
+            align-items: center;
             padding-bottom: 6px;
             border-bottom: 1px solid var(--border);
         }
+        /* 관심지역 등록 버튼 */
+        #btn-save-region {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--border);
+            color: #fff;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-right: 8px;
+        }
+        #btn-save-region:active { background: var(--accent); }
+
         .weather-main {
             font-size: 20px;
             font-weight: 700;
@@ -445,7 +494,6 @@
         #bottom-bar.edit-mode .fav-remove { display: block; }
         #bottom-bar.edit-mode .fav-live-tag { display: none; }
         
-        /* 친절한 즐겨찾기 안내 디자인 */
         .empty-fav {
             color: var(--muted);
             font-size: 13px;
@@ -536,6 +584,14 @@
             <button onclick="App.resetMap()">초기화</button>
         </div>
     </div>
+    
+    <!-- ★ 관심 지역 퀵바 -->
+    <div id="quick-bar">
+        <div style="font-size:11px; color:var(--muted); padding-top:4px; padding-right:8px;">관심 지역:</div>
+        <div id="quick-chips-container" style="display:flex; gap:6px;">
+            <!-- 칩들이 여기에 렌더링 됨 -->
+        </div>
+    </div>
 
     <div id="content">
         <div id="map-container">
@@ -551,7 +607,10 @@
             <div id="weather-widget">
                 <div class="widget-header">
                     <span>거점 기상 관측망</span>
-                    <span id="weather-time">-</span>
+                    <div style="display:flex; align-items:center;">
+                        <button id="btn-save-region" onclick="App.saveCurrentRegion()">⭐ 관심지역 등록</button>
+                        <span id="weather-time">-</span>
+                    </div>
                 </div>
                 <div class="weather-main" id="weather-condition">대기</div>
                 <div class="weather-sub">
@@ -668,7 +727,8 @@
             currentFocusBounds: null, lastSearchName: null, fromSearch: false, parentSidoCode: null,
             parentSidoName: null, parserWorker: null, hlsRetryCount: 0,
             currentCCTVs: [],
-            cctvClickTimer: null // 연타 방지(디바운싱) 타이머
+            cctvClickTimer: null,
+            savedRegions: JSON.parse(localStorage.getItem('saved_regions_v1') || '[]') // 관심 지역 데이터
         };
 
         const UI = {
@@ -805,15 +865,18 @@
                 this.initGeocoder();
                 this.initResizeListener();
                 this.loadFavorites();
+                this.renderSavedRegions(); // 관심지역 렌더링
                 await this.loadSpatialData();
                 this.fetchGlobalWeather();
                 this.startAutoSync();
             },
 
             initMap: function() {
+                // ★ 성능 최적화: 불필요한 페이드/줌 애니메이션 비활성화로 터치 즉시 즉각 반응하도록 설정
                 this.map = L.map('map', {
                     center: [35.8, 127.5], zoom: 7, minZoom: 7, maxBounds: CONFIG.BOUNDS,
-                    zoomControl: false, renderer: L.canvas()
+                    zoomControl: false, renderer: L.canvas(),
+                    fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false
                 });
                 L.tileLayer(CONFIG.API.MAP_TILE, { attribution: '© OSM', maxZoom: 18, updateWhenIdle: true, keepBuffer: 2 }).addTo(this.map);
                 L.control.zoom({ position: 'bottomright' }).addTo(this.map);
@@ -965,6 +1028,48 @@
                 } catch (e) {}
             },
 
+            // ★ 관심 지역 기능 추가
+            renderSavedRegions: function() {
+                var container = document.getElementById('quick-chips-container');
+                container.innerHTML = '';
+                var self = this;
+                State.savedRegions.forEach(function(region) {
+                    var chip = document.createElement('div');
+                    chip.className = 'quick-chip';
+                    chip.innerHTML = '<span>' + region.name + '</span><span class="quick-chip-remove" onclick="App.removeSavedRegion(\'' + region.name + '\', event)">×</span>';
+                    chip.onclick = function() { self.executeDirectSearch(region.name, region.lat, region.lng); };
+                    container.appendChild(chip);
+                });
+                // 저장된 관심지역이 없으면 바를 숨김 처리할 수도 있으나 접근성을 위해 남겨둠
+            },
+
+            saveCurrentRegion: function() {
+                if (!State.lastSearchName || !State.currentFocusBounds) {
+                    UI.showToast('먼저 지도에서 원하는 지역(시/군/구)을 클릭하세요', '#f59e0b');
+                    return;
+                }
+                var center = State.currentFocusBounds.getCenter();
+                var name = State.lastSearchName;
+                
+                // 중복 확인
+                if (State.savedRegions.find(r => r.name === name)) {
+                    UI.showToast('이미 등록된 관심 지역입니다', '#f59e0b');
+                    return;
+                }
+                
+                State.savedRegions.push({ name: name, lat: center.lat, lng: center.lng });
+                localStorage.setItem('saved_regions_v1', JSON.stringify(State.savedRegions));
+                this.renderSavedRegions();
+                UI.showToast('[' + name + '] 관심 지역 등록 완료', '#22c55e');
+            },
+
+            removeSavedRegion: function(name, event) {
+                event.stopPropagation();
+                State.savedRegions = State.savedRegions.filter(r => r.name !== name);
+                localStorage.setItem('saved_regions_v1', JSON.stringify(State.savedRegions));
+                this.renderSavedRegions();
+            },
+
             toggleEditMode: function() {
                 State.isEditMode = !State.isEditMode;
                 var btn = document.getElementById('btn-edit-mode');
@@ -973,7 +1078,7 @@
                 if (State.isEditMode) {
                     btn.innerText = '편집 완료'; btn.classList.add('active'); bar.classList.add('edit-mode');
                     if (State.activeCCTV) addBtn.style.display = 'inline-block';
-                    UI.showToast('편집 모드 · 삭제/등록 가능', '#f59e0b');
+                    UI.showToast('편집 모드 · 하단 X 버튼으로 삭제 가능', '#f59e0b');
                 } else {
                     btn.innerText = '편집 모드'; btn.classList.remove('active'); bar.classList.remove('edit-mode');
                     addBtn.style.display = 'none';
@@ -1146,7 +1251,7 @@
             },
 
             handleSidoClick: async function(sidoCode, name, bounds) {
-                this.currentLevel = 1; State.fromSearch = false; State.parentSidoCode = null; State.parentSidoName = null;
+                this.currentLevel = 1; State.fromSearch = false; State.parentSidoCode = null; State.parentSidoName = null; State.lastSearchName = name;
                 UI.updateHeader('[' + name + '] 하위 구역 확인'); UI.resetWeatherWidget(); this.map.fitBounds(bounds);
                 
                 this.clearCCTVResources(); 
@@ -1162,7 +1267,7 @@
             },
 
             handleSigunguClick: function(name, bounds) {
-                this.currentLevel = 2; State.fromSearch = false; this.currentFocusBounds = bounds; this.map.fitBounds(bounds);
+                this.currentLevel = 2; State.fromSearch = false; this.currentFocusBounds = bounds; State.lastSearchName = name; this.map.fitBounds(bounds);
                 UI.updateHeader('관측 대상: ' + name);
                 
                 this.fetchActualCCTVData(bounds, false);
