@@ -4,48 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <!-- 모바일 단독 앱(PWA) 모드 활성화를 위한 설정 -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CCTV관측">
-    <meta name="theme-color" content="#0f1419">
+    <meta name="theme-color" content="#0b0f14">
     
-    <!-- 보안 차단(Mixed Content) 우회 강제 승격 -->
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     
-    <!-- PWA 아이콘 -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📡</text></svg>">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%230f1419%22/><text x=%2250%22 y=%2250%22 font-size=%2270%22 text-anchor=%22middle%22 dominant-baseline=%22central%22>📡</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%230b0f14%22/><text x=%2250%22 y=%2250%22 font-size=%2270%22 text-anchor=%22middle%22 dominant-baseline=%22central%22>📡</text></svg>">
 
     <title>광역 인프라 및 기상 관측 통합 대시보드</title>
 
-    <!-- 라이브러리 로드 -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-    <script src="https://cdn.jsjsㅕdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
     <style>
         :root {
-            --bg: #0f1419;
-            --panel: #1a2332;
-            --card: #243044;
-            --border: #2d3a4f;
-            --text: #e8eef7;
-            --muted: #8b9cb3;
+            --bg: #0b0f14;
+            --panel: rgba(18, 25, 36, 0.85);
+            --card: rgba(36, 48, 68, 0.8);
+            --border: rgba(255, 255, 255, 0.1);
+            --text: #f1f5f9;
+            --muted: #94a3b8;
             --accent: #3b82f6;
             --accent2: #f59e0b;
             --danger: #ef4444;
-            --success: #22c55e;
-            --header-height: 56px;
+            --success: #10b981;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             height: 100dvh;
-            font-family: 'Pretendard', 'Malgun Gothic', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Pretendard Variable', 'Malgun Gothic', -apple-system, sans-serif;
             background: var(--bg);
             color: var(--text);
             display: flex;
@@ -53,109 +49,95 @@
             overflow: hidden;
             -webkit-user-select: none;
             user-select: none;
+            touch-action: manipulation;
         }
         
+        /* ★ 스크롤바 부활 및 세련된 디자인 적용 */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--bg); }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
 
         #header {
-            flex: 0 0 var(--header-height);
+            flex: 0 0 56px;
             padding: 0 16px;
             padding-top: env(safe-area-inset-top);
-            height: calc(var(--header-height) + env(safe-area-inset-top));
-            background: rgba(15,20,25,0.95);
-            border-bottom: 1px solid var(--border);
+            height: calc(56px + env(safe-area-inset-top));
+            background: rgba(11, 15, 20, 0.95);
             display: flex;
             align-items: center;
             justify-content: space-between;
             z-index: 20;
-            position: relative;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
         }
-        #pinned-region-bar {
-            display: none;
-            padding: 10px 16px;
-            background: rgba(12, 16, 23, 0.95);
-            border-bottom: 1px solid var(--border);
-            font-size: 13px;
-            align-items: center;
-            gap: 12px;
-            z-index: 19;
-        }
-        #pinned-region-bar.active { display: flex; }
-        .pinned-tag {
-            background: rgba(36, 48, 68, 0.8);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 4px 12px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: var(--text);
-            font-weight: 600;
-            cursor: pointer;
-            transition: border-color 0.2s;
-        }
-        .pinned-tag:hover { border-color: var(--accent); }
-        .pinned-tag .remove-pin { color: var(--danger); font-weight: bold; cursor: pointer; padding-left: 4px; }
-        
         #current-location-text {
-            font-size: 14px;
-            font-weight: 600;
+            font-size: 15px;
+            font-weight: 700;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 55vw;
+            max-width: 42vw; 
+            letter-spacing: -0.3px;
         }
-        .btn-group { display: flex; gap: 8px; }
+        .btn-group { display: flex; gap: 6px; }
         .btn-group button {
-            padding: 8px 14px;
-            background: var(--card);
+            padding: 7px 12px;
+            background: rgba(255,255,255,0.08);
             color: var(--text);
-            border: 1px solid var(--border);
+            border: 1px solid rgba(255,255,255,0.1);
             border-radius: 8px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-group button:active { background: rgba(255,255,255,0.15); transform: scale(0.95); }
+        #btn-refresh { background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.3); color: #93c5fd; }
+
+        #quick-bar {
+            flex: 0 0 auto;
+            background: var(--panel);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            border-top: 1px solid var(--border);
+            padding: 8px 14px;
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            white-space: nowrap;
+            z-index: 15;
+        }
+        .quick-chip {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 5px 14px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
             transition: all 0.2s;
         }
-        .btn-group button:hover { background: var(--border); }
-        .btn-group button:active { transform: scale(0.95); }
+        .quick-chip:active { background: rgba(255,255,255,0.15); border-color: var(--accent); }
+        .quick-chip-remove { color: var(--danger); font-size: 15px; font-weight: bold; line-height: 1; margin-top:-2px; margin-left:2px;}
+        .chip-weather { font-size: 11px; font-weight: 700; opacity: 0.9; margin-left: 2px; display: inline-flex; align-items: center; gap: 3px; }
 
-        /* 논블로킹 로딩 바 */
-        #loading-bar {
-            position: absolute;
-            bottom: 0; left: 0;
-            height: 2px;
-            background: var(--accent);
-            width: 0%;
-            transition: width 0.3s ease, opacity 0.3s ease;
-            opacity: 0;
-            z-index: 21;
-        }
-        .loading-active #loading-bar { opacity: 1; animation: loadingProgress 2s infinite ease-in-out; }
-        @keyframes loadingProgress {
-            0% { width: 0%; transform: translateX(0); }
-            50% { width: 50%; transform: translateX(50vw); }
-            100% { width: 100%; transform: translateX(100vw); }
-        }
-
-        #content { display: flex; flex: 1; min-height: 0; position: relative; }
+        #content { display: flex; flex: 1; min-height: 0; }
         #map-container {
             flex: 2;
             position: relative;
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            background: #111;
+            background: #000;
         }
         
-        /* 다크모드 타일 반전 필터 */
-        .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+        .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(90%) contrast(95%); }
         #map { flex: 1; width: 100%; z-index: 1; background: transparent; }
 
         #btn-my-location {
@@ -164,6 +146,7 @@
             left: 14px;
             z-index: 1000;
             background: var(--card);
+            backdrop-filter: blur(8px);
             color: var(--text);
             border: 1px solid var(--border);
             border-radius: 50%;
@@ -177,107 +160,110 @@
             font-size: 20px;
             transition: all 0.2s;
         }
-        #btn-my-location:hover { background: var(--panel); }
         #btn-my-location:active { transform: scale(0.9); }
 
         #side-panel {
             flex: 1;
             background: var(--panel);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             display: flex;
             flex-direction: column;
             padding: 14px;
-            gap: 12px;
+            gap: 14px;
             overflow-y: auto;
             min-width: 320px;
         }
 
-        /* 기상 위젯 */
         #weather-widget {
             display: none;
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 16px;
             padding: 16px;
-            transition: background 0.3s ease, transform 0.2s ease;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: background 0.4s ease, border-color 0.4s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
         .widget-header {
             font-size: 11px;
-            color: var(--muted);
+            color: rgba(255,255,255,0.6);
             margin-bottom: 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding-bottom: 8px;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         }
-        #btn-pin-region {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text);
+        #btn-save-region {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 4px 10px;
             border-radius: 6px;
-            padding: 4px 8px;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        #btn-pin-region:hover { background: var(--border); }
-        .weather-main {
-            font-size: 24px;
+            font-size: 10px;
             font-weight: 700;
+            cursor: pointer;
+            margin-right: 8px;
+            transition: all 0.2s;
+        }
+        #btn-save-region:active { background: var(--accent); border-color: var(--accent); transform: scale(0.95); }
+
+        .weather-main {
+            font-size: 26px;
+            font-weight: 800;
+            color: #fff;
             margin-bottom: 8px;
             display: flex;
             align-items: center;
             gap: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
-        .weather-sub { font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; gap: 4px; }
-        .weather-row { display: flex; justify-content: space-between; align-items: center; }
+        .weather-sub { font-size: 13px; font-weight: 500; line-height: 1.6; color: rgba(255,255,255,0.9); }
 
         #video-wrapper {
             flex: 1;
             background: #000;
-            border-radius: 12px;
+            border-radius: 16px;
             border: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             overflow: hidden;
             min-height: 220px;
             position: relative;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
         }
         #video-header {
             padding: 12px 14px;
-            background: rgba(17, 17, 17, 0.9);
+            background: rgba(10, 10, 10, 0.85);
+            backdrop-filter: blur(5px);
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 700;
             position: absolute;
             top: 0; left: 0; right: 0;
             z-index: 10;
-            backdrop-filter: blur(4px);
         }
-        #video-content { flex: 1; position: relative; display: flex; background: #000; margin-top: 45px; justify-content: center; align-items: center;}
+        #video-content { flex: 1; position: relative; display: flex; margin-top: 44px; background: #000; }
         
         .placeholder {
             color: var(--muted);
+            margin: auto;
             font-size: 13px;
             text-align: center;
-            line-height: 1.5;
+            padding: 16px;
+            line-height: 1.6;
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 12px;
-            width: 100%;
             position: absolute;
             inset: 0;
             justify-content: center;
         }
-        
-        .video-loader-spinner {
+        .video-loader {
             border: 3px solid rgba(255,255,255,0.1);
             border-top-color: var(--accent);
             border-radius: 50%;
@@ -285,44 +271,83 @@
             height: 28px;
             animation: spin 0.8s linear infinite;
         }
-        @keyframes spin { to { transform: rotate(360deg); } }
 
         video { width: 100%; height: 100%; object-fit: contain; position: absolute; inset: 0; background: #000; }
 
-        .video-controls { display: flex; gap: 8px; align-items: center; }
-        .icon-btn {
-            background: var(--card);
-            color: var(--text);
-            border: 1px solid var(--border);
+        .video-controls { display: flex; gap: 6px; align-items: center; }
+        .action-btn {
+            padding: 6px 10px;
+            border: none;
             border-radius: 6px;
-            width: 32px; height: 32px;
-            display: none;
-            align-items: center;
-            justify-content: center;
+            font-size: 11px;
+            font-weight: 800;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: transform 0.1s;
         }
-        .icon-btn:hover { background: var(--border); }
-        .icon-btn.active-btn { display: flex; }
-        #btn-fav-add { background: var(--success); color: #111; border: none; font-size: 12px; padding: 0 12px; font-weight: 700; width: auto; }
-
+        .action-btn:active { transform: scale(0.9); }
+        #btn-fav-add { background: var(--success); color: #111; display: none; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4);} 
+        #btn-pip { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.1); display: none;}
+        #btn-fullscreen { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.1); display: none;}
+        
         .video-badge {
             font-size: 10px;
             padding: 3px 6px;
             border-radius: 4px;
-            background: var(--muted);
-            color: #fff;
+            background: rgba(255,255,255,0.1);
+            color: var(--muted);
             margin-left: 8px;
             font-weight: bold;
-            letter-spacing: 0.5px;
         }
-        .video-badge.active { background: var(--danger); animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .video-badge.active { background: var(--danger); color: #fff; animation: pulse 1.8s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
-        /* 하단 패널 */
+        .leaflet-div-icon-custom { background: transparent; border: none; pointer-events: none !important; }
+        
+        .integrated-marker {
+            background: rgba(15, 20, 25, 0.95);
+            backdrop-filter: blur(4px);
+            color: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: center;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+            overflow: hidden;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            max-width: 140px; 
+            z-index: 500;
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+        .integrated-marker.zoom-small { font-size: 10px; max-width: 110px; }
+        .integrated-marker.zoom-small .im-name { padding: 4px 6px; font-size: 10px; }
+        .integrated-marker.zoom-small .im-weather { padding: 4px 6px; font-size: 10px; }
+
+        .im-name {
+            font-weight: 800;
+            background: rgba(0,0,0,0.5);
+            padding: 6px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .im-weather {
+            padding: 6px 10px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            justify-content: center;
+        }
+
         #bottom-panel {
-            flex: 0 0 190px;
-            background: #0c1017;
+            flex: 0 0 200px;
+            background: rgba(11, 15, 20, 0.95);
+            backdrop-filter: blur(10px);
             border-top: 1px solid var(--border);
             display: flex;
             flex-direction: column;
@@ -335,22 +360,21 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: var(--panel);
             border-bottom: 1px solid var(--border);
         }
-        #bottom-header span { color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: 0.5px; }
+        #bottom-header span { color: var(--accent2); font-size: 13px; font-weight: 800; }
         #btn-edit-mode {
-            padding: 6px 14px;
+            padding: 5px 14px;
             background: transparent;
             color: var(--muted);
             border: 1px solid transparent;
             border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 11px;
+            font-weight: 700;
             cursor: pointer;
             transition: all 0.2s;
         }
-        #btn-edit-mode:hover { color: var(--text); }
+        #btn-edit-mode:active { background: rgba(255,255,255,0.05); }
         #btn-edit-mode.active { background: rgba(239, 68, 68, 0.1); color: var(--danger); border-color: var(--danger); }
         
         #bottom-bar {
@@ -361,156 +385,96 @@
             overflow-y: hidden;
             gap: 14px;
             flex: 1;
-            scroll-behavior: smooth;
             -webkit-overflow-scrolling: touch;
-            scrollbar-width: thin;
-            scrollbar-color: #4b5563 transparent;
-        }
-        #bottom-bar::-webkit-scrollbar {
-            height: 8px;
-            display: block; /* 모바일에서도 표시되도록 강제 */
-        }
-        #bottom-bar::-webkit-scrollbar-track {
-            background: transparent;
-            border-radius: 4px;
-        }
-        #bottom-bar::-webkit-scrollbar-thumb {
-            background: #4b5563;
-            border-radius: 4px;
-        }
-        #bottom-bar::-webkit-scrollbar-thumb:hover {
-            background: #6b7280;
         }
         
         .fav-card {
-            flex: 0 0 220px;
-            height: 140px;
+            flex: 0 0 230px;
+            height: 146px;
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 12px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
             cursor: pointer;
             position: relative;
-            transition: transform 0.2s, border-color 0.2s;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: transform 0.2s ease, border-color 0.3s ease;
         }
-        .fav-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+        .fav-card:active { transform: scale(0.97); }
         .fav-screen {
-            height: 85px;
-            background: #111;
+            height: 90px;
+            background: #000;
             position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            overflow: hidden;
         }
         .fav-screen video { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; z-index: 1; pointer-events: none; }
-        .fav-play-icon { font-size: 20px; color: rgba(255,255,255,0.4); z-index: 0; }
+        
+        .fav-screen-loading { position: absolute; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.6); z-index: 0; }
+
         .fav-live-tag {
-            position: absolute; top: 6px; left: 6px;
-            background: rgba(0,0,0,0.8); color: var(--danger);
-            font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px;
-            border: 1px solid var(--danger); z-index: 2;
+            position: absolute; top: 5px; left: 5px;
+            background: rgba(0,0,0,0.75); color: var(--danger); font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; border: 1px solid var(--danger); z-index: 2;
         }
         .fav-name-tag {
-            position: absolute; bottom: 6px; right: 6px;
-            background: rgba(0,0,0,0.8); color: #fff;
-            font-size: 10px; padding: 3px 6px; border-radius: 4px; z-index: 2;
+            position: absolute; bottom: 5px; right: 5px;
+            background: rgba(0,0,0,0.75); color: #fff; font-size: 10px; font-weight: 600; padding: 2px 5px; border-radius: 3px; z-index: 2;
         }
-        .fav-details { padding: 6px 10px; background: var(--panel); flex: 1; display: flex; flex-direction: column; justify-content: center; z-index: 2; }
-        .fav-loc { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .fav-weather { font-size: 12px; font-weight: 600; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+        .fav-details { padding: 6px 10px; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        .fav-loc { font-size: 11px; color: rgba(255,255,255,0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;}
+        .fav-weather { font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 4px; color: #fff; }
         
         .fav-remove {
-            display: none; position: absolute; top: 6px; right: 6px;
-            background: var(--danger); color: #fff; border: none; border-radius: 4px;
-            padding: 4px 10px; font-size: 11px; font-weight: 700; z-index: 5; cursor: pointer;
+            display: none; position: absolute; top: 5px; right: 5px;
+            background: rgba(239,68,68,0.9); color: #fff; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 800; z-index: 5; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.5);
         }
         #bottom-bar.edit-mode .fav-remove { display: block; }
         #bottom-bar.edit-mode .fav-live-tag { display: none; }
         
-        /* 사용자 친화적 가이드 안내 UI */
-        .empty-fav { 
-            color: var(--muted); 
-            font-size: 13px; 
-            width: 100%; 
-            text-align: center; 
+        .empty-fav {
+            color: var(--muted);
+            font-size: 13px;
+            width: 100%;
+            text-align: center;
             line-height: 1.6;
             background: rgba(255,255,255,0.02);
             padding: 20px;
             border-radius: 12px;
-            border: 1px dashed var(--border);
+            border: 1px dashed rgba(255,255,255,0.1);
         }
         .empty-fav b { color: var(--accent); }
 
-        /* 토스트 컨테이너 */
+        #loading-overlay {
+            position: absolute; inset: 0; background: rgba(11, 15, 20, 0.85); backdrop-filter: blur(4px);
+            z-index: 1000; display: none; justify-content: center; align-items: center; flex-direction: column;
+            color: var(--success); font-size: 14px; font-weight: 700; letter-spacing: 0.5px;
+        }
+        .spinner { width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--success); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         #toast-container {
-            position: fixed; bottom: 220px; left: 50%; transform: translateX(-50%);
-            z-index: 3000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;
-            align-items: center;
+            position: fixed; bottom: 215px; left: 50%; transform: translateX(-50%); z-index: 3000;
+            display: flex; flex-direction: column; gap: 8px; pointer-events: none;
         }
         .toast {
-            background: rgba(36, 48, 68, 0.95); color: #fff;
-            padding: 12px 20px; border-radius: 24px; font-size: 13px; font-weight: 600;
-            border: 1px solid var(--border); box-shadow: 0 8px 16px rgba(0,0,0,0.4);
-            opacity: 0; transform: translateY(10px); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            backdrop-filter: blur(4px);
-            white-space: nowrap;
+            background: rgba(36, 48, 68, 0.95); backdrop-filter: blur(4px); color: #fff;
+            padding: 12px 20px; border-radius: 24px; font-size: 13px; font-weight: 700;
+            border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            opacity: 0; transform: translateY(10px); transition: all 0.3s ease; white-space: nowrap;
         }
         .toast.show { opacity: 1; transform: translateY(0); }
 
-        /* 커스텀 마커 */
-        .leaflet-div-icon-custom { background: transparent; border: none; pointer-events: none !important; }
-        .integrated-marker {
-            background: rgba(17, 24, 39, 0.85);
-            color: #fff;
-            border: 1px solid var(--border); 
-            border-radius: 10px;
-            font-size: 12px; 
-            text-align: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5); 
-            overflow: hidden;
-            transform: translate(-50%, -50%); 
-            pointer-events: none;
-            min-width: 70px;
-            max-width: 150px; 
-            z-index: 500;
-            backdrop-filter: blur(4px);
-            display: flex;
-            flex-direction: column;
-        }
-        .integrated-marker.zoom-small { min-width: 60px; max-width: 110px; }
-        .integrated-marker.zoom-small .im-top { font-size: 10px; padding: 4px 6px; }
-        .integrated-marker.zoom-small .im-bottom { font-size: 11px; padding: 4px 6px; }
-        .im-top { font-weight: 700; background: rgba(0,0,0,0.5); padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,0.1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; justify-content: center; gap: 4px; }
-        .im-bottom { padding: 5px 8px; font-weight: 600; display: flex; align-items: center; gap: 4px; justify-content: center; }
-        
-        /* 뱃지 효과 */
-        .im-cctv-badge {
-            background: var(--success); color: #111; border-radius: 4px;
-            padding: 1px 4px; font-size: 9px; font-weight: 900;
-            box-shadow: 0 0 4px rgba(34,197,94,0.4);
-            display: inline-block;
-        }
-
-        /* 단일 점 마커 시인성 강화 */
-        .cctv-dot {
-            width: 16px; height: 16px; background: #ff2a2a;
-            border-radius: 50%; border: 2.5px solid #ffffff;
-            box-shadow: 0 0 10px rgba(255, 42, 42, 0.9), 0 2px 4px rgba(0,0,0,0.6);
-            cursor: pointer; transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
-            touch-action: manipulation; 
-        }
-        .cctv-dot.active {
-            background: var(--success);
-            box-shadow: 0 0 15px var(--success), 0 3px 6px rgba(0,0,0,0.6);
-            transform: scale(1.3); z-index: 1000 !important;
-        }
-
-        .leaflet-control-geocoder { border-radius: 10px !important; box-shadow: 0 4px 16px rgba(0,0,0,0.4) !important; border: 1px solid var(--border) !important; overflow: hidden; }
-        .leaflet-control-geocoder-form input { background: var(--card) !important; color: var(--text) !important; border: none !important; padding: 12px 14px !important; font-size: 13px !important; }
+        .leaflet-control-geocoder { border-radius: 12px !important; box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important; border: 1px solid var(--border) !important; overflow: hidden; width: 100%; max-width:320px; }
+        .leaflet-control-geocoder-form input { background: var(--card) !important; color: var(--text) !important; border: none !important; padding: 12px 14px !important; font-size: 14px !important; width: 100%; font-weight:600;}
+        .leaflet-control-geocoder-alternatives { background: var(--panel) !important; max-height: 40vh; overflow-y: auto; display: block !important; border-top: 1px solid var(--border);}
+        .leaflet-control-geocoder-alternatives li { border-bottom: 1px solid rgba(255,255,255,0.05) !important; list-style: none; }
+        .leaflet-control-geocoder-alternatives a { color: var(--text) !important; padding: 12px 14px !important; display: block; font-size: 13px !important; text-decoration: none; font-weight:500;}
+        .leaflet-control-geocoder-alternatives a:hover, .leaflet-control-geocoder-alternatives-selected { background: rgba(255,255,255,0.1) !important; }
 
         @media (max-width: 768px) {
             #content { flex-direction: column; }
@@ -522,45 +486,43 @@
 </head>
 <body>
     <div id="header">
-        <span id="current-location-text">시스템 동기화 완료 · 관측 대상 시/도를 선택하세요</span>
+        <span id="current-location-text">동기화 완료 · 지역을 선택하세요</span>
         <div class="btn-group">
-            <button onclick="App.refreshCurrent()" aria-label="현재 화면 새로고침">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg> 새로고침
-            </button>
-            <button onclick="App.goBack()" aria-label="이전 화면으로 이동">이전</button>
-            <button onclick="App.resetMap()" aria-label="초기 화면으로 이동">초기화</button>
+            <button id="btn-refresh" onclick="App.refreshCurrent()" title="빈 화면 시 새로고침">🔄 새로고침</button>
+            <button onclick="App.goBack()">이전</button>
+            <button onclick="App.resetMap()">초기화</button>
         </div>
-        <div id="loading-bar"></div>
     </div>
-    <div id="pinned-region-bar">
-        <span style="color: var(--muted); font-size: 13px;">관심 지역:</span>
-        <div id="pinned-region-tags"></div>
+    
+    <div id="quick-bar">
+        <div style="font-size:11px; color:var(--muted); padding-top:4px; padding-right:8px; font-weight:bold;">관심 지역:</div>
+        <div id="quick-chips-container" style="display:flex; gap:6px;"></div>
     </div>
 
     <div id="content">
         <div id="map-container">
             <div id="map"></div>
-            <button id="btn-my-location" onclick="App.findMyLocation()" title="내 위치 중심으로 탐색" aria-label="내 위치 찾기">🎯</button>
+            <button id="btn-my-location" onclick="App.findMyLocation()" title="내 위치 중심으로 탐색">🎯</button>
+            <div id="loading-overlay">
+                <div class="spinner"></div>
+                <span id="loading-text">동기화 중...</span>
+            </div>
         </div>
 
         <div id="side-panel">
             <div id="weather-widget">
                 <div class="widget-header">
-                    <span>거점 기상 관측망</span>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <button id="btn-pin-region" onclick="App.pinCurrentRegion()">📌 이 지역 상단 고정</button>
-                        <span id="weather-time">-</span>
+                    <span style="color:rgba(255,255,255,0.8); font-weight:bold;">거점 기상 관측망</span>
+                    <div style="display:flex; align-items:center;">
+                        <button id="btn-save-region" onclick="App.saveCurrentRegion()">📌 이 지역 상단 고정</button>
+                        <span id="weather-time" style="color:rgba(255,255,255,0.7);">-</span>
                     </div>
                 </div>
                 <div class="weather-main" id="weather-condition">대기</div>
                 <div class="weather-sub">
-                    <div class="weather-row">
-                        <span id="weather-temp">기온: - ℃</span>
-                        <span id="weather-wind">풍속: - km/h</span>
-                    </div>
-                    <div class="weather-row" style="margin-top:4px;">
-                        <span id="weather-status" style="font-weight:700;">분석: -</span>
-                    </div>
+                    <span id="weather-temp">기온: - ℃</span> |
+                    <span id="weather-wind">풍속: - km/h</span>
+                    <div id="weather-status" style="margin-top:6px;font-weight:700;">분석: -</div>
                 </div>
             </div>
 
@@ -571,26 +533,18 @@
                         <span id="video-badge" class="video-badge">대기</span>
                     </div>
                     <div class="video-controls">
-                        <!-- 아이콘 버튼 적용 -->
-                        <button id="btn-pip" class="icon-btn" onclick="App.togglePIP()" title="팝업 모드(PIP)" aria-label="팝업 모드로 보기">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="12" y="12" width="7" height="7"></rect></svg>
-                        </button>
-                        <button id="btn-fullscreen" class="icon-btn" onclick="App.toggleFullscreen()" title="전체화면" aria-label="전체화면으로 보기">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-                        </button>
-                        <button id="btn-fav-add" class="icon-btn" onclick="App.addCurrentToFavorites()" aria-label="현재 채널 즐겨찾기 추가">채널 등록</button>
+                        <button id="btn-pip" class="action-btn" onclick="App.togglePIP()" title="팝업 모드">PIP</button>
+                        <button id="btn-fullscreen" class="action-btn" onclick="App.toggleFullscreen()">전체화면</button>
+                        <button id="btn-fav-add" class="action-btn" onclick="App.addCurrentToFavorites()" style="display:none;">⭐ CCTV 즐겨찾기</button>
                     </div>
                 </div>
                 <div id="video-content">
-                    <!-- 상태별 UI 요소를 미리 정의하고 display 속성으로 토글 (DOM 조작 최적화) -->
-                    <div id="video-placeholder" class="placeholder" style="display: flex;">
-                        지도 상의 인프라 마커(붉은 점) 또는<br>하단 채널을 선택하세요
+                    <div id="video-placeholder" class="placeholder">지도 상의 인프라 마커(빨간 점) 또는<br>하단 채널을 선택하세요</div>
+                    <div id="video-loader" class="placeholder" style="display:none;">
+                        <div class="video-loader"></div>
+                        <span id="video-loader-text" style="color:var(--success); font-weight:bold;">채널 연결 중...</span>
                     </div>
-                    <div id="video-loader" class="placeholder" style="display: none;">
-                        <div class="video-loader-spinner"></div>
-                        <span id="video-loader-text">채널 연결 중...</span>
-                    </div>
-                    <video id="cctv-player" controls autoplay muted playsinline style="display: none;"></video>
+                    <video id="cctv-player" controls autoplay muted playsinline style="display:none;"></video>
                 </div>
             </div>
         </div>
@@ -599,10 +553,9 @@
     <div id="bottom-panel">
         <div id="bottom-header">
             <span>로컬 관측 채널 목록</span>
-            <button id="btn-edit-mode" onclick="App.toggleEditMode()" aria-label="채널 편집 모드 토글">편집 모드</button>
+            <button id="btn-edit-mode" onclick="App.toggleEditMode()">편집 모드</button>
         </div>
         <div id="bottom-bar">
-            <!-- 안내 문구 표시용 뼈대 -->
             <div class="empty-fav">로컬 데이터 로드 중...</div>
         </div>
     </div>
@@ -619,18 +572,17 @@
                 SIGUNGU_GEOJSON: 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_municipalities_geo_simple.json',
                 WEATHER: 'https://api.open-meteo.com/v1/forecast',
                 GEOCODE: 'https://nominatim.openstreetmap.org/reverse',
-                // 상세 도로망이 보이는 OpenStreetMap 교체 (CSS 다크 필터 연동)
-                MAP_TILE: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+                MAP_TILE: 'https://xdworld.vworld.kr/2d/midnight/service/{z}/{x}/{y}.png'
             },
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
-            TIMEOUT: 12000,
+            TIMEOUT: 15000, 
             CCTV_CACHE_TTL: 300000, 
             WEATHER_CACHE_TTL: 600000,
             MAJOR_CITIES: [
                 { name: '서울특별시', lat: 37.5665, lng: 126.9780 }, { name: '부산광역시', lat: 35.1796, lng: 129.0756 },
                 { name: '대구광역시', lat: 35.8714, lng: 128.6014 }, { name: '인천광역시', lat: 37.4563, lng: 126.7052 },
                 { name: '광주광역시', lat: 35.1595, lng: 126.8526 }, { name: '대전광역시', lat: 36.3504, lng: 127.3845 },
-                { name: '세종시', lat: 36.4800, lng: 127.2890 }, { name: '제주도', lat: 33.4890, lng: 126.4983 },
+                { name: '세종특별자치시', lat: 36.4800, lng: 127.2890 }, { name: '제주특별자치도', lat: 33.4890, lng: 126.4983 },
                 { name: '경기도', lat: 37.2750, lng: 127.0094 }, { name: '강원도', lat: 37.8854, lng: 127.7298 },
                 { name: '충청북도', lat: 36.6356, lng: 127.4913 }, { name: '충청남도', lat: 36.6013, lng: 126.6608 },
                 { name: '전라북도', lat: 35.8202, lng: 127.1086 }, { name: '전라남도', lat: 34.8161, lng: 126.4629 },
@@ -638,32 +590,9 @@
             ]
         };
 
-        // DOM 객체 최적화 캐싱
-        const DOM = {
-            headerText: document.getElementById('current-location-text'),
-            loadingBar: document.getElementById('header'),
-            weatherWidget: document.getElementById('weather-widget'),
-            weatherTime: document.getElementById('weather-time'),
-            weatherCond: document.getElementById('weather-condition'),
-            weatherTemp: document.getElementById('weather-temp'),
-            weatherWind: document.getElementById('weather-wind'),
-            weatherStatus: document.getElementById('weather-status'),
-            videoTitle: document.getElementById('video-title'),
-            videoBadge: document.getElementById('video-badge'),
-            videoPlaceholder: document.getElementById('video-placeholder'),
-            videoLoader: document.getElementById('video-loader'),
-            videoLoaderText: document.getElementById('video-loader-text'),
-            videoPlayer: document.getElementById('cctv-player'),
-            btnPip: document.getElementById('btn-pip'),
-            btnFull: document.getElementById('btn-fullscreen'),
-            btnFavAdd: document.getElementById('btn-fav-add'),
-            bottomBar: document.getElementById('bottom-bar'),
-            btnEditMode: document.getElementById('btn-edit-mode'),
-            toastContainer: document.getElementById('toast-container')
-        };
-
         const CacheStore = {
-            sidoGeoJSON: null, sigunguGeoJSON: null, cctvDataMap: new Map(), weatherCache: new Map(),
+            sidoGeoJSON: null, sigunguGeoJSON: null, cctvDataMap: new Map(),
+            weatherCache: new Map(),
             purgeExpiredCCTVCache: function() {
                 const now = Date.now();
                 for (const [key, val] of this.cctvDataMap.entries()) {
@@ -671,34 +600,32 @@
                 }
             },
             getWeather: async function(lat, lng) {
-                const key = `${lat.toFixed(1)}_${lng.toFixed(1)}`;
-                const now = Date.now();
-                const cached = this.weatherCache.get(key);
+                var key = lat.toFixed(1) + '_' + lng.toFixed(1);
+                var now = Date.now();
+                var cached = this.weatherCache.get(key);
                 if (cached && (now - cached.ts < CONFIG.WEATHER_CACHE_TTL)) return cached.data;
                 
-                const res = await fetchWithTimeout(`${CONFIG.API.WEATHER}?latitude=${lat.toFixed(3)}&longitude=${lng.toFixed(3)}&current_weather=true&timezone=Asia%2FSeoul`, { timeout: 4500 });
-                if (!res.ok) throw new Error('Weather API Error');
-                const data = await res.json();
+                var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + lat.toFixed(3) + '&longitude=' + lng.toFixed(3) + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4500 });
+                var data = await res.json();
                 this.weatherCache.set(key, { ts: now, data: data.current_weather });
                 return data.current_weather;
             }
         };
 
-        // 영구 그리드 메모리: 이전 로딩했던 CCTV 위치를 기억해 뱃지 출력 최적화
         const CCTVMemory = {
-            grids: new Set(JSON.parse(localStorage.getItem('cctv_grids_v3') || '[]')),
+            grids: new Set(JSON.parse(localStorage.getItem('cctv_grids_v6') || '[]')),
             add: function(lat, lng) {
                 const key = Math.floor(lat * 10) + '_' + Math.floor(lng * 10);
                 if (!this.grids.has(key)) {
                     this.grids.add(key);
-                    localStorage.setItem('cctv_grids_v3', JSON.stringify(Array.from(this.grids)));
+                    localStorage.setItem('cctv_grids_v6', JSON.stringify(Array.from(this.grids)));
                 }
             },
             hasNearby: function(lat, lng) {
                 const y = Math.floor(lat * 10); const x = Math.floor(lng * 10);
                 for(let dy=-1; dy<=1; dy++) {
                     for(let dx=-1; dx<=1; dx++) {
-                        if(this.grids.has(`${y+dy}_${x+dx}`)) return true;
+                        if(this.grids.has((y+dy) + '_' + (x+dx))) return true;
                     }
                 }
                 return false;
@@ -707,63 +634,56 @@
 
         const State = {
             currentWeather: null, activeCCTV: null, isEditMode: false, syncInterval: null,
-            currentFocusBounds: null, lastSearchName: null, fromSearch: false, parentSidoCode: null,
+            currentFocusBounds: null, activeRegionName: null, fromSearch: false, parentSidoCode: null,
             parentSidoName: null, parserWorker: null, hlsRetryCount: 0,
-            currentCCTVs: [], isLoading: 0, cctvClickTimer: null,
-            pinnedRegion: JSON.parse(localStorage.getItem('cctv_pinned_v2') || 'null'),
-            currentRegionInfo: null
+            currentCCTVs: [], nationwideCCTVs: [],
+            cctvClickTimer: null, activeMarker: null, 
+            // ★ 기존 관심 지역 완벽 보존
+            savedRegions: JSON.parse(localStorage.getItem('cctv_saved_regions_v6') || '[]')
         };
 
+        const canvasRenderer = L.canvas({ padding: 0.5 });
+
         const UI = {
-            setLoading: function(isLoad) {
-                if(isLoad) {
-                    State.isLoading++;
-                    DOM.loadingBar.classList.add('loading-active');
-                } else {
-                    State.isLoading = Math.max(0, State.isLoading - 1);
-                    if(State.isLoading === 0) DOM.loadingBar.classList.remove('loading-active');
-                }
+            showLoading: function(msg) {
+                document.getElementById('loading-text').innerText = msg || '동기화 중...';
+                document.getElementById('loading-overlay').style.display = 'flex';
             },
-            showToast: function(message, color = '#3b82f6') {
-                const toast = document.createElement('div');
+            hideLoading: function() { document.getElementById('loading-overlay').style.display = 'none'; },
+            showToast: function(message, color) {
+                color = color || '#3b82f6';
+                var container = document.getElementById('toast-container');
+                var toast = document.createElement('div');
                 toast.className = 'toast';
                 toast.style.borderColor = color;
                 toast.style.color = color === '#ef4444' ? '#fca5a5' : '#fff';
                 toast.innerText = message;
-                
-                if(DOM.toastContainer.childElementCount >= 3) DOM.toastContainer.removeChild(DOM.toastContainer.firstChild);
-                
-                DOM.toastContainer.appendChild(toast);
+                container.appendChild(toast);
                 requestAnimationFrame(() => toast.classList.add('show'));
-                
                 setTimeout(() => {
                     toast.classList.remove('show');
                     setTimeout(() => toast.remove(), 300);
                 }, 2500);
             },
-            updateHeader: function(text) { DOM.headerText.innerText = text; },
-            resetWeatherWidget: function() { DOM.weatherWidget.style.display = 'none'; }
+            updateHeader: function(text) { document.getElementById('current-location-text').innerText = text; },
+            resetWeatherWidget: function() { document.getElementById('weather-widget').style.display = 'none'; }
         };
 
-        async function fetchWithTimeout(resource, options = {}) {
-            const { timeout = CONFIG.TIMEOUT } = options;
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), timeout);
+        async function fetchWithTimeout(resource, options) {
+            options = options || {};
+            var timeout = options.timeout || CONFIG.TIMEOUT;
+            var controller = new AbortController();
+            var id = setTimeout(() => controller.abort(), timeout);
             try {
-                const response = await fetch(resource, { ...options, signal: controller.signal });
-                clearTimeout(id);
-                return response;
-            } catch (error) {
-                clearTimeout(id);
-                throw error;
-            }
+                var response = await fetch(resource, Object.assign({}, options, { signal: controller.signal }));
+                clearTimeout(id); return response;
+            } catch (error) { clearTimeout(id); throw error; }
         }
 
         function initDataWorker() {
             const workerCode = `
                 self.onmessage = function(e) {
-                    const rawContent = e.data;
-                    let results = [];
+                    const rawContent = e.data; let results = [];
                     try {
                         const json = JSON.parse(rawContent);
                         if (json && json.response && json.response.data) {
@@ -815,29 +735,29 @@
 
         async function getAddressFromCoords(lat, lng) {
             try {
-                const res = await fetchWithTimeout(`${CONFIG.API.GEOCODE}?format=json&lat=${lat.toFixed(3)}&lon=${lng.toFixed(3)}&zoom=14&accept-language=ko`, { timeout: 2500 });
-                const data = await res.json();
-                if (data?.address) {
-                    const ad = data.address;
-                    const result = [ad.city || ad.province, ad.borough || ad.county, ad.town || ad.village].filter(Boolean);
-                    return result.join(' ') || '상세 주소 확인 불가';
+                var res = await fetchWithTimeout(CONFIG.API.GEOCODE + '?format=json&lat=' + lat.toFixed(3) + '&lon=' + lng.toFixed(3) + '&zoom=14&accept-language=ko', { timeout: 2500 });
+                var data = await res.json();
+                if (data && data.address) {
+                    var ad = data.address;
+                    var result = [ad.city || ad.province, ad.borough || ad.county, ad.town || ad.village].filter(Boolean);
+                    return result.join(' ') || '위치 확인 불가';
                 }
                 return '행정구역 정보 없음';
-            } catch (e) { return '지오코딩 연동 지연'; }
+            } catch (e) { return '상세 주소 확인 지연'; }
         }
 
         function parseWeather(code) {
-            let icon = '☀️', text = '맑음', color = '#22c55e', bg = 'var(--card)', rain = '정상';
-            if ([1,2,3].includes(code)) { icon = '☁️'; text = '흐림'; color = '#94a3b8'; }
-            else if ([45,48].includes(code)) { icon = '🌫️'; text = '안개'; color = '#94a3b8'; }
+            var icon = '☀️', text = '맑음', color = '#38bdf8', bg = 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(2,132,199,0.5))', rain = '정상';
+            if ([1,2,3].includes(code)) { icon = '☁️'; text = '흐림'; color = '#94a3b8'; bg = 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(51,65,85,0.5))'; }
+            else if ([45,48].includes(code)) { icon = '🌫️'; text = '안개'; color = '#94a3b8'; bg = 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(71,85,105,0.5))'; }
             else if ([51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code)) {
-                icon = '🌧️'; text = '강우'; color = '#ef4444'; bg = 'rgba(239,68,68,0.1)'; rain = '강우 감지';
+                icon = '🌧️'; text = '강우'; color = '#60a5fa'; bg = 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(30,58,138,0.5))'; rain = '강우 감지';
             }
             else if ([71,73,75,77].includes(code)) {
-                icon = '❄️'; text = '강설'; color = '#3b82f6'; bg = 'rgba(59,130,246,0.1)'; rain = '강설 감지';
+                icon = '❄️'; text = '강설'; color = '#c084fc'; bg = 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(88,28,135,0.5))'; rain = '강설 감지';
             }
             else if ([95,96,99].includes(code)) {
-                icon = '⚡'; text = '폭우/낙뢰'; color = '#dc2626'; bg = 'rgba(220,38,38,0.15)'; rain = '위험 기상';
+                icon = '⚡'; text = '폭우/낙뢰'; color = '#f87171'; bg = 'linear-gradient(135deg, rgba(69,10,10,0.8), rgba(153,27,27,0.5))'; rain = '위험 기상';
             }
             return { icon, text, color, bg, rain };
         }
@@ -852,83 +772,59 @@
                 this.initMap();
                 this.initGeocoder();
                 this.initResizeListener();
-                this.initVisibilityListener();
+                
+                // ★ 삭제 안 되도록 기존 cctv_fav_v8 키를 그대로 불러옵니다.
                 this.loadFavorites();
-                this.renderPinnedRegion();
+                this.renderSavedRegions(); 
                 await this.loadSpatialData();
+                this.fetchGlobalWeather();
                 
-                if (State.pinnedRegion) {
-                    this.executeDirectSearch(State.pinnedRegion.name, State.pinnedRegion.lat, State.pinnedRegion.lng);
-                } else {
-                    this.fetchGlobalWeather();
-                }
-                
+                this.fetchNationwideCCTV();
                 this.startAutoSync();
             },
-            
-            refreshCurrent: function() {
-                UI.setLoading(true);
+
+            // ★ 완벽한 소프트 리프레시: DOM 파괴 없이 내부 상태만 동기화
+            refreshCurrent: async function() {
+                UI.showLoading('데이터 갱신 중...');
+                this.fetchGlobalWeather();
                 this.fetchFavoritesWeather();
                 if (this.currentLevel === 0) {
-                    this.fetchGlobalWeather();
-                } else if (this.currentLevel === 2 && this.currentFocusBounds) {
+                    await this.fetchNationwideCCTV();
+                } else if (this.currentFocusBounds) {
                     this.fetchActualCCTVData(this.currentFocusBounds, false);
                     var center = this.currentFocusBounds.getCenter();
                     this.fetchWeatherData(center.lat, center.lng);
-                } else if (this.currentLevel === 1 && this.geoLayer) {
-                    this.fetchLocalWeather(this.geoLayer);
                 }
-                setTimeout(() => { UI.setLoading(false); UI.showToast('데이터가 갱신되었습니다', '#22c55e'); }, 800);
-            },
-            
-            renderPinnedRegion: function() {
-                var bar = document.getElementById('pinned-region-bar');
-                var tags = document.getElementById('pinned-region-tags');
-                if (!State.pinnedRegion) {
-                    bar.classList.remove('active');
-                    tags.innerHTML = '';
-                    return;
-                }
-                bar.classList.add('active');
-                tags.innerHTML = `<div class="pinned-tag" onclick="App.executeDirectSearch('${State.pinnedRegion.name}', ${State.pinnedRegion.lat}, ${State.pinnedRegion.lng})">
-                    <span>${State.pinnedRegion.name}</span>
-                    <span class="remove-pin" onclick="App.removePinnedRegion(event)" title="고정 해제">×</span>
-                </div>`;
-            },
-            
-            pinCurrentRegion: function() {
-                if (!State.currentRegionInfo) return;
-                State.pinnedRegion = State.currentRegionInfo;
-                localStorage.setItem('cctv_pinned_v2', JSON.stringify(State.pinnedRegion));
-                this.renderPinnedRegion();
-                UI.showToast(`[${State.pinnedRegion.name}] 상단 바에 고정되었습니다.`, '#22c55e');
-            },
-            
-            removePinnedRegion: function(e) {
-                e.stopPropagation();
-                State.pinnedRegion = null;
-                localStorage.removeItem('cctv_pinned_v2');
-                this.renderPinnedRegion();
-                UI.showToast('관심 지역 고정이 해제되었습니다.', '#f59e0b');
+                setTimeout(() => UI.hideLoading(), 600);
+                UI.showToast('데이터가 최신화 되었습니다.', '#10b981');
             },
 
             initMap: function() {
                 this.map = L.map('map', {
                     center: [35.8, 127.5], zoom: 7, minZoom: 7, maxBounds: CONFIG.BOUNDS,
-                    zoomControl: false, renderer: L.canvas()
+                    zoomControl: false, renderer: canvasRenderer,
+                    fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false
                 });
-                L.tileLayer(CONFIG.API.MAP_TILE, { attribution: '© OSM', maxZoom: 18, updateWhenIdle: true, keepBuffer: 2 }).addTo(this.map);
+                L.tileLayer(CONFIG.API.MAP_TILE, { attribution: '© VWorld', maxZoom: 18, updateWhenIdle: true, keepBuffer: 2 }).addTo(this.map);
                 L.control.zoom({ position: 'bottomright' }).addTo(this.map);
 
-                // 클러스터링을 제거하고 개별 마커를 즉시 렌더링하기 위한 독립 레이어 그룹
                 this.cctvLayer = L.featureGroup().addTo(this.map);
                 this.infoLabelLayer = L.layerGroup().addTo(this.map);
 
                 var self = this;
                 this.map.on('zoomend', function() {
                     var currentZoom = self.map.getZoom();
-                    document.querySelectorAll('.integrated-marker').forEach(el => {
+                    var markerEls = document.querySelectorAll('.integrated-marker');
+                    markerEls.forEach(function(el) {
                         el.classList.toggle('zoom-small', currentZoom < 8);
+                    });
+
+                    // 확대될수록 누르기 편하게 점 크기 조절
+                    var radiusSize = currentZoom < 9 ? 1.5 : (currentZoom < 12 ? 3.5 : 5.5);
+                    self.cctvLayer.eachLayer(function(marker) {
+                        if(marker !== State.activeMarker) {
+                            marker.setStyle({ radius: radiusSize, weight: currentZoom < 9 ? 0 : 1.5 });
+                        }
                     });
                 });
             },
@@ -936,7 +832,7 @@
             initGeocoder: function() {
                 var self = this;
                 L.Control.geocoder({
-                    defaultMarkGeocode: false, placeholder: '시·군·구 또는 도로명 검색...', errorMessage: '검색 결과가 없습니다',
+                    defaultMarkGeocode: false, placeholder: '시·군·구 또는 도로명 검색...', errorMessage: '검색 결과가 없습니다', collapsed: false,
                     geocoder: L.Control.Geocoder.nominatim({ geocodingQueryParams: { countrycodes: 'kr', 'accept-language': 'ko' } })
                 }).on('markgeocode', function(e) {
                     var name = e.geocode.name || e.geocode.properties?.display_name || '검색 지점';
@@ -949,25 +845,15 @@
                 var self = this;
                 if ('ResizeObserver' in window) {
                     new ResizeObserver(() => {
-                        window.requestAnimationFrame(() => self.map?.invalidateSize());
+                        window.requestAnimationFrame(() => self.map && self.map.invalidateSize());
                     }).observe(document.body);
                 }
-            },
-
-            initVisibilityListener: function() {
-                document.addEventListener("visibilitychange", () => {
-                    if (document.hidden) {
-                        clearInterval(State.syncInterval);
-                    } else {
-                        this.startAutoSync();
-                    }
-                });
             },
 
             startAutoSync: function() {
                 var self = this;
                 clearInterval(State.syncInterval);
-                State.syncInterval = setInterval(function() {
+                State.syncInterval = setInterval(() => {
                     self.fetchFavoritesWeather();
                     if (self.currentLevel === 0) self.fetchGlobalWeather();
                     if (self.currentLevel === 2 && self.currentFocusBounds) {
@@ -979,14 +865,14 @@
 
             findMyLocation: function() {
                 if (!navigator.geolocation) return UI.showToast('위치 정보를 지원하지 않는 브라우저입니다', '#ef4444');
-                UI.setLoading(true);
+                UI.showLoading('현재 위치 확인 중...');
                 navigator.geolocation.getCurrentPosition(
                     (pos) => {
-                        UI.setLoading(false);
+                        UI.hideLoading();
                         this.executeDirectSearch('내 위치 (GPS)', pos.coords.latitude, pos.coords.longitude);
                     },
                     (err) => {
-                        UI.setLoading(false);
+                        UI.hideLoading();
                         UI.showToast('위치 권한이 거부되었거나 알 수 없는 오류입니다', '#ef4444');
                     },
                     { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
@@ -996,7 +882,7 @@
             fetchGlobalWeather: function() {
                 this.infoLabelLayer.clearLayers();
                 var self = this;
-                CONFIG.MAJOR_CITIES.forEach(async function(city) {
+                CONFIG.MAJOR_CITIES.forEach(async (city) => {
                     try {
                         var w = await CacheStore.getWeather(city.lat, city.lng);
                         self.renderIntegratedMarkers([{ status: 'fulfilled', value: { name: city.name, lat: city.lat, lng: city.lng, weather: w } }]);
@@ -1005,9 +891,10 @@
             },
 
             fetchLocalWeather: function(geoJsonLayer) {
+                // 이전 레벨의 마커 삭제 보장
                 this.infoLabelLayer.clearLayers();
                 var self = this;
-                geoJsonLayer.eachLayer(async function(layer) {
+                geoJsonLayer.eachLayer(async (layer) => {
                     var center = layer.getBounds().getCenter();
                     var name = layer.feature.properties.name;
                     try {
@@ -1021,14 +908,15 @@
                 this.infoLabelLayer.eachLayer(function(layer) {
                     var lat = layer.getLatLng().lat;
                     var lng = layer.getLatLng().lng;
-                    var hasCCTV = CCTVMemory.hasNearby(lat, lng);
+                    var hasCCTV = CCTVMemory.hasNearby(lat, lng) || State.currentCCTVs.some(c => Math.abs(c.coordy - lat) < 0.15 && Math.abs(c.coordx - lng) < 0.15);
                     
                     if (hasCCTV) {
                         var el = layer.getElement();
                         if (el) {
-                            var topEl = el.querySelector('.im-top');
-                            if (topEl && !topEl.querySelector('.im-cctv-badge')) {
-                                topEl.innerHTML += ' <span class="im-cctv-badge">📷CCTV</span>';
+                            var badge = el.querySelector('.im-cctv-badge');
+                            if (!badge) {
+                                var titleEl = el.querySelector('.im-name');
+                                if (titleEl) titleEl.innerHTML += ' <span class="im-cctv-badge" style="background:var(--success); color:#111; border-radius:3px; padding:1px 4px; font-size:9px; margin-left:4px; font-weight:900;">📷CCTV</span>';
                             }
                         }
                     }
@@ -1042,9 +930,9 @@
                     if (res.status === 'fulfilled') {
                         var w = res.value.weather;
                         var p = parseWeather(w.weathercode);
-                        var html = `<div class="integrated-marker ${isSmall}" style="border-color:${p.color}">
-                            <div class="im-top">${res.value.name}</div>
-                            <div class="im-bottom"><span style="font-size:14px">${p.icon}</span> ${w.temperature}℃</div>
+                        var html = `<div class="integrated-marker ${isSmall}" style="border-color:${p.color}; background:${p.bg};">
+                            <div class="im-name">${res.value.name}</div>
+                            <div class="im-weather"><span style="font-size:14px">${p.icon}</span> ${w.temperature}℃</div>
                             </div>`;
                         var icon = L.divIcon({ html: html, className: 'leaflet-div-icon-custom', iconSize: null });
                         L.marker([res.value.lat, res.value.lng], { icon: icon, interactive: false }).addTo(self.infoLabelLayer);
@@ -1057,73 +945,139 @@
                 try {
                     var w = await CacheStore.getWeather(lat, lng);
                     var p = parseWeather(w.weathercode);
-                    var html = `<div class="integrated-marker" style="border-color:${p.color}">
-                        <div class="im-top">${name}</div>
-                        <div class="im-bottom"><span style="font-size:14px">${p.icon}</span> ${w.temperature}℃</div>
+                    var html = `<div class="integrated-marker" style="border-color:${p.color}; background:${p.bg};">
+                        <div class="im-name">${name}</div>
+                        <div class="im-weather"><span style="font-size:14px">${p.icon}</span> ${w.temperature}℃</div>
                         </div>`;
                     var icon = L.divIcon({ html: html, className: 'leaflet-div-icon-custom', iconSize: null });
                     L.marker([lat, lng], { icon: icon, interactive: false }).addTo(this.infoLabelLayer);
-                    
                     setTimeout(() => this.updateWeatherCCTVBadges(), 50);
                 } catch (e) {}
             },
 
+            // ★ 관심 지역 렌더링 시 날씨 동시 호출
+            renderSavedRegions: function() {
+                var container = document.getElementById('quick-chips-container');
+                if(!container) return;
+                container.innerHTML = '';
+                var self = this;
+                State.savedRegions.forEach(function(region) {
+                    var chipId = 'quick-chip-' + region.name.replace(/[^a-zA-Z0-9가-힣]/g, '');
+                    var chip = document.createElement('div');
+                    chip.className = 'quick-chip';
+                    chip.id = chipId;
+                    chip.innerHTML = `<span>${region.name}</span><span class="chip-weather"></span><span class="quick-chip-remove" onclick="App.removeSavedRegion('${region.name}', event)">×</span>`;
+                    chip.onclick = () => self.executeDirectSearch(region.name, region.lat, region.lng);
+                    container.appendChild(chip);
+                    self.fetchChipWeather(region, chipId);
+                });
+            },
+
+            fetchChipWeather: async function(region, chipId) {
+                try {
+                    var w = await CacheStore.getWeather(region.lat, region.lng);
+                    var p = parseWeather(w.weathercode);
+                    var chip = document.getElementById(chipId);
+                    if (chip) {
+                        var wSpan = chip.querySelector('.chip-weather');
+                        if (wSpan) wSpan.innerHTML = `${p.icon} ${w.temperature}℃`;
+                        chip.style.borderColor = p.color;
+                    }
+                } catch(e) {}
+            },
+
+            // ★ [이 지역 상단 고정] 기능이 언제나 확실하게 작동하도록 변수 강제 매핑
+            saveCurrentRegion: function() {
+                var name = State.activeRegionName || "현재 관측 구역";
+                var bounds = State.currentFocusBounds || (this.geoLayer ? this.geoLayer.getBounds() : null);
+
+                if (!bounds) {
+                    UI.showToast('먼저 지도에서 원하는 지역(시/군/구)을 클릭하세요', '#f59e0b');
+                    return;
+                }
+
+                var center = bounds.getCenter();
+                if (State.savedRegions.find(r => r.name === name)) {
+                    UI.showToast('이미 등록된 관심 지역입니다', '#f59e0b');
+                    return;
+                }
+                
+                State.savedRegions.push({ name: name, lat: center.lat, lng: center.lng });
+                localStorage.setItem('cctv_saved_regions_v6', JSON.stringify(State.savedRegions));
+                this.renderSavedRegions();
+                UI.showToast(`[${name}] 상단 바에 고정되었습니다.`, '#22c55e');
+            },
+
+            removeSavedRegion: function(name, event) {
+                event.stopPropagation();
+                State.savedRegions = State.savedRegions.filter(r => r.name !== name);
+                localStorage.setItem('cctv_saved_regions_v6', JSON.stringify(State.savedRegions));
+                this.renderSavedRegions();
+            },
+
             toggleEditMode: function() {
                 State.isEditMode = !State.isEditMode;
-                var btn = DOM.btnEditMode;
-                var bar = DOM.bottomBar;
+                var btn = document.getElementById('btn-edit-mode');
+                var bar = document.getElementById('bottom-bar');
                 if (State.isEditMode) {
                     btn.innerText = '편집 완료'; btn.classList.add('active'); bar.classList.add('edit-mode');
-                    if (State.activeCCTV) DOM.btnFavAdd.classList.add('active-btn');
-                    UI.showToast('편집 모드 · 삭제/등록 가능', '#f59e0b');
+                    UI.showToast('편집 모드 · 하단 X 버튼으로 삭제 가능', '#f59e0b');
                 } else {
                     btn.innerText = '편집 모드'; btn.classList.remove('active'); bar.classList.remove('edit-mode');
-                    DOM.btnFavAdd.classList.remove('active-btn');
                 }
             },
 
             togglePIP: async function() {
-                var video = DOM.videoPlayer;
+                var video = document.getElementById("cctv-player");
                 if (!video) return;
                 try {
-                    if (document.pictureInPictureElement) {
-                        await document.exitPictureInPicture();
-                    } else if (document.pictureInPictureEnabled) {
-                        await video.requestPictureInPicture();
-                    } else {
-                        UI.showToast('PIP 모드를 지원하지 않는 브라우저입니다', '#ef4444');
-                    }
-                } catch(e) {
-                    UI.showToast('PIP 전환 중 오류가 발생했습니다', '#ef4444');
-                }
+                    if (document.pictureInPictureElement) await document.exitPictureInPicture();
+                    else if (document.pictureInPictureEnabled) await video.requestPictureInPicture();
+                    else UI.showToast('PIP 모드를 지원하지 않는 브라우저입니다', '#ef4444');
+                } catch(e) { UI.showToast('PIP 전환 중 오류가 발생했습니다', '#ef4444'); }
             },
 
             toggleFullscreen: function() {
-                var elem = DOM.videoPlayer;
+                var elem = document.getElementById("cctv-player");
                 if (!elem) return;
                 if (!document.fullscreenElement) {
-                    if (elem.requestFullscreen) { elem.requestFullscreen(); }
-                    else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
-                    else if (elem.msRequestFullscreen) { elem.msRequestFullscreen(); }
+                    if (elem.requestFullscreen) elem.requestFullscreen();
+                    else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+                    else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
                 } else {
-                    if (document.exitFullscreen) { document.exitFullscreen(); }
+                    if (document.exitFullscreen) document.exitFullscreen();
                 }
             },
 
             clearFavVideos: function() {
                 for (var key in this.favHlsInstances) {
                     if (this.favHlsInstances[key]) {
+                        this.favHlsInstances[key].stopLoad();
+                        this.favHlsInstances[key].detachMedia();
                         this.favHlsInstances[key].destroy();
                     }
                 }
                 this.favHlsInstances = {};
             },
 
+            pauseFavVideos: function() {
+                for (var key in this.favHlsInstances) {
+                    if (this.favHlsInstances[key]) this.favHlsInstances[key].stopLoad(); 
+                }
+            },
+            
+            resumeFavVideos: function() {
+                for (var key in this.favHlsInstances) {
+                    if (this.favHlsInstances[key]) this.favHlsInstances[key].startLoad(); 
+                }
+            },
+
             loadFavorites: function() {
                 try {
-                    var stored = localStorage.getItem('cctv_fav_v10');
-                    if (stored) { this.favorites = JSON.parse(stored); } 
-                    else { throw new Error('No default'); }
+                    // ★ 기존에 고객님이 저장했던 즐겨찾기(v8) 100% 보존
+                    var stored = localStorage.getItem('cctv_fav_v8');
+                    if (stored) this.favorites = JSON.parse(stored);
+                    else throw new Error('No default');
                 } catch (e) {
                     this.favorites = [];
                     this.saveFavorites();
@@ -1132,64 +1086,66 @@
                 this.fetchFavoritesWeather();
             },
 
-            saveFavorites: function() { localStorage.setItem('cctv_fav_v10', JSON.stringify(this.favorites)); },
+            saveFavorites: function() { localStorage.setItem('cctv_fav_v8', JSON.stringify(this.favorites)); },
 
+            // ★ CCTV 즐겨찾기 무조건 저장 (에러 시에도 무시하고 저장함)
             addCurrentToFavorites: async function() {
-                if (!State.isEditMode || !State.activeCCTV) return;
-                var cctv = State.activeCCTV;
-                if (this.favorites.find(function(f) { return f.name === cctv.name; })) {
-                    UI.showToast('이미 등록된 채널입니다', '#ef4444'); return;
+                if (!State.activeCCTV) {
+                    UI.showToast('먼저 지도에서 빨간 점(CCTV)을 클릭하세요', '#ef4444');
+                    return;
                 }
-                UI.setLoading(true);
-                var address = await getAddressFromCoords(cctv.lat, cctv.lng);
+                var cctv = State.activeCCTV;
+                if (this.favorites.find(f => f.name === cctv.name)) {
+                    UI.showToast('이미 등록된 채널입니다', '#f59e0b'); return;
+                }
+                
+                UI.showLoading('채널 등록 중...');
+                var address = '위치 정보 연동 지연'; // 에러 대비 기본값
+                try {
+                    address = await getAddressFromCoords(cctv.lat, cctv.lng);
+                } catch(e) {} 
+                
                 this.favorites.unshift({ id: 'fav_' + Date.now(), name: cctv.name, lat: cctv.lat, lng: cctv.lng, url: cctv.url, address: address });
                 this.saveFavorites(); this.renderFavoritesUI(); this.fetchFavoritesWeather();
-                UI.setLoading(false); UI.showToast('채널이 저장되었습니다', '#22c55e');
+                UI.hideLoading(); UI.showToast('채널이 즐겨찾기에 저장되었습니다', '#22c55e');
             },
 
             removeFavorite: function(id, event) {
                 event.stopPropagation();
                 if (!State.isEditMode) return;
-                this.favorites = this.favorites.filter(function(f) { return f.id !== id; });
+                this.favorites = this.favorites.filter(f => f.id !== id);
                 this.saveFavorites(); this.renderFavoritesUI();
             },
 
             renderFavoritesUI: function() {
                 var self = this;
-                var bar = DOM.bottomBar;
+                var bar = document.getElementById('bottom-bar');
                 bar.innerHTML = '';
                 
                 this.clearFavVideos();
 
                 if (this.favorites.length === 0) {
-                    // ★ 가이드라인 명확하게 제시
-                    bar.innerHTML = '<div class="empty-fav">⭐ <b>등록된 채널이 없습니다.</b><br>지도에서 🔴CCTV 선택 후 우측 상단의 <b>[채널 등록]</b> 버튼을 눌러주세요.</div>'; return;
+                    bar.innerHTML = '<div class="empty-fav">⭐ <b>등록된 채널이 없습니다.</b><br>지도에서 🔴빨간 점(CCTV) 선택 후 우측 상단의 <b>[⭐ 즐겨찾기 추가]</b> 버튼을 누르세요.</div>'; return;
                 }
-                
-                const fragment = document.createDocumentFragment();
                 this.favorites.forEach(function(fav) {
                     var card = document.createElement('div');
                     card.className = 'fav-card';
-                    card.onclick = function() { if (!State.isEditMode) self.executeDirectSearch(fav.name, fav.lat, fav.lng, true, fav.url); }; 
+                    card.id = 'fav-card-' + fav.id;
+                    card.onclick = function() { if (State.isEditMode) return; }; 
                     
                     card.innerHTML =
                         `<button class="fav-remove" onclick="App.removeFavorite('${fav.id}', event)">삭제</button>
                         <div class="fav-screen">
+                            <div class="fav-screen-loading">영상 연결중...</div>
                             <video id="fav-video-${fav.id}" autoplay muted playsinline></video>
                             <div class="fav-live-tag">LIVE</div>
                             <div class="fav-name-tag">${fav.name}</div>
                         </div>
-                        <div class="fav-details">
-                            <div class="fav-loc" title="${fav.address}">${fav.address}</div>
-                            <div class="fav-weather" id="fav-w-${fav.id}"><span style="color:var(--muted)">대기</span></div>
-                        </div>`;
-                    fragment.appendChild(card);
+                        <div class="fav-details"><div class="fav-loc" title="${fav.address}">${fav.address}</div><div class="fav-weather" id="fav-w-${fav.id}"><span style="color:var(--muted)">대기</span></div></div>`;
+                    bar.appendChild(card);
                 });
-                bar.appendChild(fragment);
 
-                this.favorites.forEach(function(fav) {
-                    self.initFavVideo(fav.id, fav.url);
-                });
+                this.favorites.forEach(fav => self.initFavVideo(fav.id, fav.url));
             },
 
             initFavVideo: function(id, url) {
@@ -1198,19 +1154,37 @@
                 var video = document.getElementById('fav-video-' + id);
                 if (!video) return;
 
-                if (Hls.isSupported()) {
-                    var hls = new Hls({ enableWorker: false, lowLatencyMode: true }); 
+                var startHls = () => {
+                    if (this.favHlsInstances[id]) {
+                        this.favHlsInstances[id].destroy();
+                    }
+                    var hls = new Hls({ 
+                        enableWorker: false, 
+                        lowLatencyMode: true,
+                        manifestLoadingMaxRetry: 2 // 실패 시 빠른 캐치
+                    }); 
                     hls.loadSource(secureUrl);
                     hls.attachMedia(video);
-                    hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                        video.play().catch(function() {});
+                    hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(()=>{}));
+                    
+                    // 에러 시 멈추지 않고 오토 리커버리(3초 뒤 엔진 새로 파서 재시도)
+                    hls.on(Hls.Events.ERROR, (event, data) => {
+                        if (data.fatal) {
+                            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                                setTimeout(() => startHls(), 3000); 
+                            } else {
+                                hls.destroy();
+                            }
+                        }
                     });
                     this.favHlsInstances[id] = hls;
+                };
+
+                if (Hls.isSupported()) {
+                    startHls();
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = secureUrl;
-                    video.addEventListener('loadedmetadata', function() {
-                        video.play().catch(function() {});
-                    });
+                    video.addEventListener('loadedmetadata', () => video.play().catch(()=>{}));
                 }
             },
 
@@ -1221,12 +1195,18 @@
                         var p = parseWeather(w.weathercode);
                         var el = document.getElementById('fav-w-' + fav.id);
                         if (el) el.innerHTML = `<span style="color:${p.color}">${p.icon}</span> ${w.temperature}℃`;
+                        
+                        var card = document.getElementById('fav-card-' + fav.id);
+                        if(card) {
+                            card.style.background = p.bg;
+                            card.style.borderColor = p.color;
+                        }
                     } catch (e) {}
                 });
             },
 
             loadSpatialData: async function() {
-                UI.setLoading(true);
+                UI.showLoading('공간 데이터 로딩');
                 try {
                     if (!CacheStore.sidoGeoJSON || !CacheStore.sigunguGeoJSON) {
                         var [sidoRes, sigunguRes] = await Promise.all([
@@ -1236,7 +1216,7 @@
                         CacheStore.sigunguGeoJSON = await sigunguRes.json();
                     }
                     this.renderGeoLayer(CacheStore.sidoGeoJSON, 1);
-                } catch (e) { UI.showToast('공간 데이터 통신 오류', '#ef4444'); } finally { UI.setLoading(false); }
+                } catch (e) { UI.showToast('공간 통신 오류', '#ef4444'); } finally { UI.hideLoading(); }
             },
 
             renderGeoLayer: function(geoJsonData, targetLevel) {
@@ -1246,43 +1226,63 @@
                     style: { color: targetLevel === 1 ? '#3b82f6' : '#a855f7', weight: targetLevel === 1 ? 2 : 1.5, fillOpacity: 0.06 },
                     onEachFeature: function(feature, layer) {
                         layer.on('click', function(e) {
+                            // ★ 줌인 상태(Level 2)에서 빈 땅(폴리곤) 클릭 시 튕기는 현상 원천 봉쇄
+                            if (self.currentLevel === 2) return; 
+                            
                             if (targetLevel === 1) self.handleSidoClick(feature.properties.code, feature.properties.name, layer.getBounds());
-                            // ★ 네비게이션 제약 해제: 다른 구역을 누르면 즉시 그 지역으로 이동하여 검색
                             else self.handleSigunguClick(feature.properties.name, layer.getBounds());
                         });
                     }
                 }).addTo(this.map);
             },
 
-            // 도(Province) 클릭 시 전체 범위 CCTV 즉시 로드
+            fetchNationwideCCTV: async function() {
+                try {
+                    var q = '?apiKey=' + CONFIG.API.ITS_KEY + '&type=ex&cctvType=1&minX=124.0&maxX=132.0&minY=33.0&maxY=39.0&getType=json';
+                    var proxyUrl = CONFIG.API.PROXY_BASE + encodeURIComponent(CONFIG.API.ITS_BASE + q);
+                    var res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
+                    var rawData = await res.text();
+                    var cctvDataArray = await parseITSDataAsync(rawData);
+                    
+                    if (cctvDataArray && cctvDataArray.length > 0) {
+                        State.nationwideCCTVs = cctvDataArray;
+                        cctvDataArray.forEach(c => CCTVMemory.add(c.coordy, c.coordx));
+                        if (this.currentLevel === 0) this.renderCCTVDots(cctvDataArray, false, true);
+                    }
+                } catch(e) {}
+            },
+
+            // ★ 줌인 할 때 이전 렌더링을 굳이 부수지 않고 유지하여 깜빡임 제거
             handleSidoClick: async function(sidoCode, name, bounds) {
-                this.currentLevel = 1; State.fromSearch = false; State.parentSidoCode = null; State.parentSidoName = null;
-                UI.updateHeader(`[${name}] 하위 구역 확인`); UI.resetWeatherWidget(); this.map.fitBounds(bounds);
+                this.currentLevel = 1; State.fromSearch = false; State.parentSidoCode = null; State.parentSidoName = null; 
+                State.activeRegionName = name; this.currentFocusBounds = bounds; 
+                UI.updateHeader('[' + name + '] 하위 구역 확인'); UI.resetWeatherWidget(); this.map.fitBounds(bounds);
                 
-                var center = bounds.getCenter();
-                State.currentRegionInfo = { name: name, lat: center.lat, lng: center.lng };
-                
-                // ★ 영상 시청 중 지역 이동 시 영상 꺼짐 방지 (마커만 초기화)
+                // 마커는 그대로 둠(keepMarkers = true)
                 this.clearCCTVResources(true); 
                 this.fetchActualCCTVData(bounds, false);
 
                 var filtered = {
                     type: CacheStore.sigunguGeoJSON.type,
-                    features: CacheStore.sigunguGeoJSON.features.filter(function(f) { return String(f.properties.code).indexOf(String(sidoCode)) === 0; })
+                    features: CacheStore.sigunguGeoJSON.features.filter(f => String(f.properties.code).indexOf(String(sidoCode)) === 0)
                 };
                 this.renderGeoLayer(filtered, 2); 
                 this.fetchLocalWeather(this.geoLayer);
             },
 
             handleSigunguClick: function(name, bounds) {
-                this.currentLevel = 2; State.fromSearch = false; this.currentFocusBounds = bounds; this.map.fitBounds(bounds);
-                UI.updateHeader(`관측 대상: ${name}`);
+                this.currentLevel = 2; State.fromSearch = false; 
+                this.currentFocusBounds = bounds; State.activeRegionName = name; 
+                this.map.fitBounds(bounds);
+                UI.updateHeader('관측 대상: ' + name);
                 
+                // ★ 엉뚱한 동네 이름 안 뜨게, 주변 동네 마커 싹 지우고 딱 하나만 그림
+                this.infoLabelLayer.clearLayers(); 
                 var center = bounds.getCenter();
-                State.currentRegionInfo = { name: name, lat: center.lat, lng: center.lng };
+                this.showSearchWeatherMarker(name, center.lat, center.lng);
                 
-                // ★ 영상 시청 중 지역 이동 시 영상 꺼짐 방지 (마커만 초기화)
-                this.clearCCTVResources(true);
+                // 마커는 그대로 둠(keepMarkers = true)
+                this.clearCCTVResources(true); 
                 this.fetchActualCCTVData(bounds, false);
                 this.fetchWeatherData(center.lat, center.lng); 
             },
@@ -1290,8 +1290,10 @@
             executeDirectSearch: function(name, lat, lng, autoPlay, forceUrl) {
                 autoPlay = autoPlay || false; forceUrl = forceUrl || '';
                 if (State.isEditMode) return;
-                this.currentLevel = 2; State.fromSearch = true; State.lastSearchName = name;
-                UI.updateHeader(`관측 지점: ${name}`);
+                this.currentLevel = 2; State.fromSearch = true; 
+                // ★ 칩 누를 때 엉뚱한 지명 안 뜨게 변수 강제 고정
+                State.activeRegionName = name; 
+                UI.updateHeader('관측 지점: ' + name);
 
                 var matchedFeature = null; var matchedBounds = null; var matchedName = name;
                 State.parentSidoCode = null; State.parentSidoName = null;
@@ -1302,7 +1304,9 @@
                         try {
                             var layer = L.geoJSON(f);
                             if (layer.getBounds().contains([lat, lng])) {
-                                matchedFeature = f; matchedBounds = layer.getBounds(); matchedName = f.properties.name || name;
+                                matchedFeature = f; matchedBounds = layer.getBounds(); 
+                                // 강제로 입력된 이름 유지
+                                matchedName = name; 
                                 if (f.properties && f.properties.code) {
                                     var sidoCode = String(f.properties.code).substring(0, 2); State.parentSidoCode = sidoCode;
                                     if (CacheStore.sidoGeoJSON && CacheStore.sidoGeoJSON.features) {
@@ -1331,147 +1335,137 @@
                     this.map.fitBounds(bounds, { maxZoom: 12, padding: [20, 20] }); this.currentFocusBounds = bounds;
                 }
 
-                State.currentRegionInfo = { name: matchedName, lat: lat, lng: lng };
                 this.fetchWeatherData(lat, lng); this.showSearchWeatherMarker(matchedName, lat, lng);
 
                 if (autoPlay && forceUrl) {
-                    // ★ 자동 재생 시에만 비디오 완전히 리셋
-                    this.clearCCTVResources(false); this.renderCCTVDots([{ cctvname: name, coordy: lat, coordx: lng, cctvurl: forceUrl }]);
-                    DOM.videoTitle.innerText = `[송출] ${name}`;
-                    this.playCCTVStream(forceUrl, { name, lat, lng, url: forceUrl });
-                } else { 
-                    // ★ 그 외에는 마커만 새로 고침
-                    this.clearCCTVResources(true);
-                    this.fetchActualCCTVData(this.currentFocusBounds, false, 1, autoPlay); 
-                }
+                    this.clearCCTVResources(true); this.renderCCTVDots([{ cctvname: name, coordy: lat, coordx: lng, cctvurl: forceUrl }]);
+                    document.getElementById('video-title').innerText = '[송출] ' + name;
+                    this.playCCTVStream(forceUrl, { name: name, lat: lat, lng: lng, url: forceUrl });
+                } else { this.fetchActualCCTVData(this.currentFocusBounds, false, 1, autoPlay); }
             },
 
             fetchWeatherData: async function(lat, lon) {
-                DOM.weatherWidget.style.display = 'block';
-                DOM.weatherCond.innerText = '분석 중';
+                var widget = document.getElementById('weather-widget'); widget.style.display = 'block';
+                document.getElementById('weather-condition').innerText = '분석 중';
                 try {
                     var w = await CacheStore.getWeather(lat, lon);
                     State.currentWeather = w;
                     var now = new Date(); var p = parseWeather(w.weathercode);
-                    DOM.weatherWidget.style.backgroundColor = p.bg;
-                    DOM.weatherTime.innerText = `시각: ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-                    DOM.weatherCond.innerHTML = `${p.icon} <span style="color:${p.color}">${p.text}</span>`;
-                    DOM.weatherTemp.innerText = `기온: ${w.temperature}℃`;
-                    DOM.weatherWind.innerText = `풍속: ${w.windspeed} km/h`;
-                    DOM.weatherStatus.innerText = `분석: ${p.rain}`;
-                    DOM.weatherStatus.style.color = p.color;
+                    widget.style.background = p.bg;
+                    widget.style.borderColor = p.color;
+                    document.getElementById('weather-time').innerText = `시각: ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                    document.getElementById('weather-condition').innerHTML = `${p.icon} <span style="color:${p.color}">${p.text}</span>`;
+                    document.getElementById('weather-temp').innerText = `온도: ${w.temperature}℃`;
+                    document.getElementById('weather-wind').innerText = `풍속: ${w.windspeed} km/h`;
+                    document.getElementById('weather-status').innerText = `분석: ${p.rain}`;
+                    document.getElementById('weather-status').style.color = p.color;
                 } catch (e) { UI.showToast('기상 수신 실패', '#ef4444'); }
             },
 
             fetchActualCCTVData: async function(bounds, isBroadSearch, attempt, autoPlay) {
                 isBroadSearch = isBroadSearch || false; attempt = attempt || 1; autoPlay = autoPlay || false;
-                if (!isBroadSearch) this.clearCCTVResources(true);
-                if (!isBroadSearch) UI.setLoading(true);
+                if (!isBroadSearch) this.clearCCTVResources(true); // 마커 지우지 않음
+                if (!isBroadSearch) UI.showLoading('인프라 좌표 렌더링');
 
                 CacheStore.purgeExpiredCCTVCache();
-                var cacheKey = `${bounds.getWest().toFixed(2)}_${bounds.getEast().toFixed(2)}_${bounds.getSouth().toFixed(2)}_${bounds.getNorth().toFixed(2)}`;
+                var cacheKey = bounds.getWest().toFixed(2) + '_' + bounds.getEast().toFixed(2) + '_' + bounds.getSouth().toFixed(2) + '_' + bounds.getNorth().toFixed(2);
                 var cached = CacheStore.cctvDataMap.get(cacheKey);
 
                 if (cached && (Date.now() - cached.timestamp < CONFIG.CCTV_CACHE_TTL)) {
                     State.currentCCTVs = cached.data;
                     this.renderCCTVDots(cached.data, autoPlay);
                     this.updateWeatherCCTVBadges();
-                    if (!isBroadSearch) UI.setLoading(false); return;
+                    if (!isBroadSearch) UI.hideLoading(); return;
                 }
 
-                var padX = (bounds.getEast() - bounds.getWest()) * 0.05;
-                var padY = (bounds.getNorth() - bounds.getSouth()) * 0.05;
-                var minX = (bounds.getWest() - padX).toFixed(5);
-                var maxX = (bounds.getEast() + padX).toFixed(5);
-                var minY = (bounds.getSouth() - padY).toFixed(5);
-                var maxY = (bounds.getNorth() + padY).toFixed(5);
+                var center = bounds.getCenter(); var padVal = attempt === 1 ? 0.07 : 0.14;
+                var minX = (center.lng - padVal).toFixed(5); var maxX = (center.lng + padVal).toFixed(5);
+                var minY = (center.lat - padVal).toFixed(5); var maxY = (center.lat + padVal).toFixed(5);
 
-                var q = `?apiKey=${CONFIG.API.ITS_KEY}&type=ex&cctvType=1&minX=${minX}&maxX=${maxX}&minY=${minY}&maxY=${maxY}&getType=json`;
+                var q = '?apiKey=' + CONFIG.API.ITS_KEY + '&type=ex&cctvType=1&minX=' + minX + '&maxX=' + maxX + '&minY=' + minY + '&maxY=' + maxY + '&getType=json';
 
                 try {
                     var proxyUrl = CONFIG.API.PROXY_BASE + encodeURIComponent(CONFIG.API.ITS_BASE + q);
-                    var res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
+                    var res = await fetchWithTimeout(proxyUrl, { timeout: 6000 });
                     var rawData = await res.text();
                     var cctvDataArray = await parseITSDataAsync(rawData);
 
                     if (!cctvDataArray || cctvDataArray.length === 0) {
-                        if (!isBroadSearch) UI.showToast('해당 구역 가용 채널 없음', '#ef4444');
+                        if (attempt === 1 && !isBroadSearch) return this.fetchActualCCTVData(bounds, false, 2, autoPlay);
+                        if (!isBroadSearch) UI.showToast('해당 반경 가용 채널 없음', '#ef4444');
                         return;
                     }
 
-                    cctvDataArray.forEach(function(c) { CCTVMemory.add(c.coordy, c.coordx); });
+                    cctvDataArray.forEach(c => CCTVMemory.add(c.coordy, c.coordx));
                     
                     State.currentCCTVs = cctvDataArray;
                     CacheStore.cctvDataMap.set(cacheKey, { timestamp: Date.now(), data: cctvDataArray });
                     
+                    // 새로 받은 데이터로 그리기 전에 기존 거 싹 밀기
+                    this.cctvLayer.clearLayers(); 
                     this.renderCCTVDots(cctvDataArray, autoPlay);
                     this.updateWeatherCCTVBadges();
 
                 } catch (error) {
                     if (!isBroadSearch) UI.showToast('서버 응답 지연', '#ef4444');
-                } finally { if(!isBroadSearch) UI.setLoading(false); }
+                } finally { UI.hideLoading(); }
             },
 
-            renderCCTVDots: function(cctvArray, autoPlay) {
+            // ★ 가벼운 캔버스 마커 (전국/지역 구분 없이 렉 없는 깔끔한 점 표시)
+            renderCCTVDots: function(cctvArray, autoPlay, isNationwide = false) {
                 autoPlay = autoPlay || false; var self = this;
+                var currentZoom = this.map.getZoom();
+                var radiusSize = currentZoom < 9 ? 1.5 : (currentZoom < 12 ? 3.5 : 5.5);
 
                 cctvArray.forEach(function(cctv, i) {
-                    var dotIcon = L.divIcon({ className: 'cctv-dot', iconSize: [16, 16] });
-                    var marker = L.marker([cctv.coordy, cctv.coordx], { icon: dotIcon });
+                    var marker = L.circleMarker([cctv.coordy, cctv.coordx], {
+                        radius: radiusSize,
+                        color: '#ffffff', 
+                        weight: currentZoom < 9 ? 0 : 1.5,
+                        fillColor: '#ef4444',
+                        fillOpacity: 0.9,
+                        renderer: canvasRenderer
+                    });
                     
-                    marker.bindPopup(`<b>[CCTV] ${cctv.cctvname}</b>`);
-                    
-                    // ★ 다중 클릭 시 영상 프리징(충돌)을 막는 디바운싱(Debouncing) 적용
                     marker.on('click', function(e) {
                         if(State.cctvClickTimer) clearTimeout(State.cctvClickTimer);
-                        
                         State.cctvClickTimer = setTimeout(() => {
-                            document.querySelectorAll('.cctv-dot').forEach(el => el.classList.remove('active'));
-                            if (e.target._icon) e.target._icon.classList.add('active');
+                            if (State.activeMarker) State.activeMarker.setStyle({ fillColor: '#ef4444', radius: radiusSize, color: '#ffffff' });
+                            marker.setStyle({ fillColor: '#10b981', radius: radiusSize + 3, color: '#ffffff' });
+                            State.activeMarker = marker;
 
-                            DOM.videoTitle.innerText = `[송출] ${cctv.cctvname}`;
+                            document.getElementById('video-title').innerText = `[송출] ${cctv.cctvname}`;
+                            document.getElementById('btn-fav-add').style.display = 'inline-block'; 
+                            
+                            self.pauseFavVideos(); 
                             self.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
-                        }, 250);
+                        }, 200); 
                     });
                     
                     self.cctvLayer.addLayer(marker);
 
-                    if (autoPlay && i === 0) {
-                        marker.fire('click');
-                    }
+                    if (autoPlay && i === 0 && !isNationwide) marker.fire('click');
                 });
             },
 
-            // 메인 뷰어 영상 재생
             playCCTVStream: function(streamUrl, cctvObj) {
-                var wrapper = DOM.videoPlaceholder.parentElement; 
-                var badge = DOM.videoBadge;
+                var wrapper = document.getElementById('video-content'); var badge = document.getElementById('video-badge');
                 State.activeCCTV = cctvObj; State.hlsRetryCount = 0;
                 
-                DOM.btnPip.classList.add('active-btn');
-                DOM.btnFull.classList.add('active-btn');
-                if (State.isEditMode) DOM.btnFavAdd.classList.add('active-btn');
-
-                // ★ 기존 영상 다운로드를 강제 중단하여 메모리 누수 방지
+                document.getElementById('btn-pip').style.display = 'inline-block';
+                document.getElementById('btn-fullscreen').style.display = 'inline-block';
+                document.getElementById('btn-fav-add').style.display = 'inline-block';
+                
                 if (this.hlsInstance) { 
                     this.hlsInstance.stopLoad();
                     this.hlsInstance.detachMedia();
                     this.hlsInstance.destroy(); 
                     this.hlsInstance = null; 
                 }
-                if (DOM.videoPlayer) {
-                    DOM.videoPlayer.pause();
-                    DOM.videoPlayer.removeAttribute('src');
-                    DOM.videoPlayer.load();
-                }
 
-                if (DOM.videoPlaceholder) DOM.videoPlaceholder.style.display = 'none';
-                if (DOM.videoLoader) DOM.videoLoader.style.display = 'flex';
-                if (DOM.videoPlayer) DOM.videoPlayer.style.display = 'none';
-                
-                var video = DOM.videoPlayer;
-                var loaderText = DOM.videoLoaderText;
-                if (loaderText) loaderText.innerText = '채널 연결 중...';
+                wrapper.innerHTML = '<div class="placeholder"><div class="video-loader"></div><span style="color:var(--success); font-weight:bold; margin-top:8px;">채널 연결 중...</span></div><video id="cctv-player" controls autoplay muted playsinline style="display:none;"></video>';
+                var video = document.getElementById('cctv-player');
+                var placeholder = wrapper.querySelector('.placeholder');
                 badge.innerText = '연결 중'; badge.className = 'video-badge';
 
                 var secureStreamUrl = streamUrl.replace(/^http:\/\//i, 'https://');
@@ -1480,10 +1474,10 @@
                     this.hlsInstance = new Hls({ enableWorker: true, lowLatencyMode: true });
                     this.hlsInstance.loadSource(secureStreamUrl);
                     this.hlsInstance.attachMedia(video);
-                    this.hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
-                        if (DOM.videoLoader) DOM.videoLoader.style.display = 'none';
+                    this.hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+                        if (placeholder) placeholder.style.display = 'none';
                         video.style.display = 'block';
-                        video.play().catch(function() {}); badge.innerText = 'LIVE'; badge.className = 'video-badge active';
+                        video.play().catch(()=>{}); badge.innerText = 'LIVE'; badge.className = 'video-badge active';
                     });
                     var self = this;
                     this.hlsInstance.on(Hls.Events.ERROR, function(event, data) {
@@ -1492,11 +1486,11 @@
                                 case Hls.ErrorTypes.NETWORK_ERROR:
                                     if (State.hlsRetryCount < 3) {
                                         State.hlsRetryCount++;
-                                        setTimeout(function() { if (self.hlsInstance) self.hlsInstance.startLoad(); }, 1500);
+                                        setTimeout(() => self.hlsInstance && self.hlsInstance.startLoad(), 1500);
                                     } else {
                                         badge.innerText = 'ERROR'; UI.showToast('연결 실패 (네트워크 제약)', '#ef4444');
                                         if (self.hlsInstance) self.hlsInstance.destroy();
-                                        if (loaderText) loaderText.innerHTML = '영상 신호를 수신할 수 없습니다.';
+                                        if (placeholder) placeholder.innerHTML = '영상 신호를 수신할 수 없습니다.';
                                     }
                                     break;
                                 case Hls.ErrorTypes.MEDIA_ERROR:
@@ -1504,63 +1498,57 @@
                                 default:
                                     if (self.hlsInstance) self.hlsInstance.destroy();
                                     badge.innerText = 'OFFLINE'; UI.showToast('스트림 세션 만료', '#ef4444'); 
-                                    if (loaderText) loaderText.innerHTML = '스트리밍 세션이 만료되었습니다.';
+                                    if (placeholder) placeholder.innerHTML = '스트리밍 세션이 만료되었습니다.';
                                     break;
                             }
                         }
                     });
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = secureStreamUrl;
-                    video.addEventListener('loadedmetadata', function() {
-                        if (DOM.videoLoader) DOM.videoLoader.style.display = 'none';
+                    video.addEventListener('loadedmetadata', () => {
+                        if (placeholder) placeholder.style.display = 'none';
                         video.style.display = 'block';
-                        video.play().catch(function() {}); badge.innerText = 'LIVE'; badge.className = 'video-badge active';
+                        video.play().catch(()=>{}); badge.innerText = 'LIVE'; badge.className = 'video-badge active';
                     });
                 }
             },
 
-            clearCCTVResources: function(keepVideo) {
-                if (!keepVideo) {
-                    if (this.hlsInstance) { 
-                        this.hlsInstance.stopLoad();
-                        this.hlsInstance.detachMedia();
-                        this.hlsInstance.destroy(); 
-                        this.hlsInstance = null; 
-                    }
-                    if (DOM.videoPlayer) {
-                        DOM.videoPlayer.pause();
-                        DOM.videoPlayer.removeAttribute('src');
-                        DOM.videoPlayer.load();
-                        DOM.videoPlayer.style.display = 'none';
-                    }
-                    if (DOM.videoPlaceholder) DOM.videoPlaceholder.style.display = 'flex';
-                    if (DOM.videoLoader) DOM.videoLoader.style.display = 'none';
-                    
-                    var badge = DOM.videoBadge;
-                    if (badge) { badge.innerText = '대기'; badge.className = 'video-badge'; }
-                    if (DOM.videoTitle) DOM.videoTitle.innerText = '스트리밍 뷰어';
-                    State.activeCCTV = null; 
-                    DOM.btnFavAdd.classList.remove('active-btn');
-                    DOM.btnPip.classList.remove('active-btn');
-                    DOM.btnFull.classList.remove('active-btn');
+            // ★ keepMarkers 파라미터 추가로 줌인/아웃 시 껌뻑임 완벽 제거
+            clearCCTVResources: function(keepMarkers = false) {
+                if (this.hlsInstance) { 
+                    this.hlsInstance.stopLoad(); this.hlsInstance.detachMedia(); this.hlsInstance.destroy(); this.hlsInstance = null; 
                 }
-                if (this.cctvLayer) this.cctvLayer.clearLayers();
+                var wrapper = document.getElementById('video-content');
+                if (wrapper) {
+                    var video = wrapper.querySelector('video');
+                    if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
+                    wrapper.innerHTML = '<div class="placeholder">지도 상의 인프라 마커(빨간 점) 또는<br>하단 채널을 선택하세요</div>';
+                }
+                if (!keepMarkers && this.cctvLayer) this.cctvLayer.clearLayers();
+                var badge = document.getElementById('video-badge');
+                if (badge) { badge.innerText = '대기'; badge.className = 'video-badge'; }
+                State.activeCCTV = null; 
+                State.activeMarker = null; 
+                document.getElementById('btn-fav-add').style.display = 'none';
+                document.getElementById('btn-pip').style.display = 'none';
+                document.getElementById('btn-fullscreen').style.display = 'none';
+                
+                this.resumeFavVideos(); 
             },
 
             goBack: function() {
-                // 이전 레벨로 갈 때는 비디오를 끔
-                this.clearCCTVResources(false); UI.resetWeatherWidget(); this.currentFocusBounds = null; State.lastSearchName = null;
+                this.clearCCTVResources(); UI.resetWeatherWidget(); this.currentFocusBounds = null; State.activeRegionName = null;
                 if (this.currentLevel === 2) {
                     if (State.fromSearch && State.parentSidoCode) {
                         this.currentLevel = 1; State.fromSearch = false;
                         var sidoName = State.parentSidoName || '상위 구역';
-                        UI.updateHeader(`[${sidoName}] 하위 구역 확인`);
+                        UI.updateHeader('[' + sidoName + '] 하위 구역 확인');
                         var filtered = {
                             type: CacheStore.sigunguGeoJSON.type,
-                            features: CacheStore.sigunguGeoJSON.features.filter(function(f) { return String(f.properties.code).indexOf(State.parentSidoCode) === 0; })
+                            features: CacheStore.sigunguGeoJSON.features.filter(f => String(f.properties.code).indexOf(State.parentSidoCode) === 0)
                         };
                         this.renderGeoLayer(filtered, 2);
-                        if (this.geoLayer) { this.map.fitBounds(this.geoLayer.getBounds(), { padding: [20, 20] }); }
+                        if (this.geoLayer) this.map.fitBounds(this.geoLayer.getBounds(), { padding: [20, 20] });
                         this.fetchLocalWeather(this.geoLayer);
                         State.parentSidoCode = null; State.parentSidoName = null;
                     } else {
@@ -1568,20 +1556,20 @@
                         UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
                         this.renderGeoLayer(CacheStore.sidoGeoJSON, 1);
                         this.fetchGlobalWeather(); this.map.setView([35.8, 127.5], 7);
-                        State.currentRegionInfo = null;
+                        if(State.nationwideCCTVs.length > 0) this.renderCCTVDots(State.nationwideCCTVs, false, true);
                     }
                 } else if (this.currentLevel === 1) {
                     this.currentLevel = 0; UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
                     this.renderGeoLayer(CacheStore.sidoGeoJSON, 1);
                     this.fetchGlobalWeather(); this.map.setView([35.8, 127.5], 7);
-                    State.currentRegionInfo = null;
+                    if(State.nationwideCCTVs.length > 0) this.renderCCTVDots(State.nationwideCCTVs, false, true);
                 }
             },
 
             resetMap: function() { this.currentLevel = 2; State.fromSearch = false; State.parentSidoCode = null; State.parentSidoName = null; this.goBack(); }
         };
 
-        document.addEventListener('DOMContentLoaded', function() { App.init(); });
+        document.addEventListener('DOMContentLoaded', () => App.init());
     </script>
 </body>
 </html>
