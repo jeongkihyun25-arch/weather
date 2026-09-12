@@ -416,7 +416,7 @@
         }
         .fav-screen video { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; z-index: 1; pointer-events: none; }
         
-        .fav-screen-loading { position: absolute; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.6); z-index: 0; }
+        .fav-screen-loading { position: absolute; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.6); z-index: 0; text-align: center; }
 
         .fav-live-tag {
             position: absolute; top: 5px; left: 5px;
@@ -424,7 +424,7 @@
         }
         .fav-name-tag {
             position: absolute; bottom: 5px; right: 5px;
-            background: rgba(0,0,0,0.75); color: #fff; font-size: 10px; font-weight: 600; padding: 2px 5px; border-radius: 3px; z-index: 2;
+            background: rgba(0,0,0,0.75); color: #fff; font-size: 10px; padding: 2px 5px; border-radius: 3px; z-index: 2;
         }
         .fav-details { padding: 6px 10px; flex: 1; display: flex; flex-direction: column; justify-content: center; }
         .fav-loc { font-size: 11px; color: rgba(255,255,255,0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;}
@@ -470,7 +470,7 @@
         }
         .toast.show { opacity: 1; transform: translateY(0); }
 
-        .leaflet-control-geocoder { border-radius: 12px !important; box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important; border: 1px solid var(--border) !important; overflow: hidden; width: 100%; max-width:320px; }
+        .leaflet-control-geocoder { border-radius: 12px !important; box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important; border: 1px solid var(--border) !important; overflow: hidden; width: 100%; max-width:320px; }
         .leaflet-control-geocoder-form input { background: var(--card) !important; color: var(--text) !important; border: none !important; padding: 12px 14px !important; font-size: 14px !important; width: 100%; font-weight:600;}
         .leaflet-control-geocoder-alternatives { background: var(--panel) !important; max-height: 40vh; overflow-y: auto; display: block !important; border-top: 1px solid var(--border);}
         .leaflet-control-geocoder-alternatives li { border-bottom: 1px solid rgba(255,255,255,0.05) !important; list-style: none; }
@@ -669,6 +669,10 @@
             resetWeatherWidget: function() { document.getElementById('weather-widget').style.display = 'none'; }
         };
 
+        // ★ 오프라인 감지 및 글로벌 네트워크 리스너 추가 (사용성 고도화)
+        window.addEventListener('offline', () => UI.showToast('네트워크가 끊어졌습니다.', '#ef4444'));
+        window.addEventListener('online', () => UI.showToast('네트워크가 연결되었습니다.', '#10b981'));
+
         async function fetchWithTimeout(resource, options) {
             options = options || {};
             var timeout = options.timeout || CONFIG.TIMEOUT;
@@ -782,47 +786,27 @@
                 this.startAutoSync();
             },
 
-            // ★ 소프트 새로고침 로직 강화 (검은 화면 및 무한 멈춤 원천 차단)
+            // ★ 소프트 새로고침 로직: 검은 화면 차단 및 부드러운 전환 구현
             softRefresh: async function() {
-                UI.showLoading('시스템 재동기화 중...');
+                UI.showLoading('데이터 최신화 중...');
                 
-                // 비디오 태그 전체를 파괴하여 WebGL 메모리를 강제 반환시킴
-                this.clearFavVideos();
-                if (this.hlsInstance) { this.hlsInstance.destroy(); this.hlsInstance = null; }
-                
-                document.getElementById('video-content').innerHTML = `
-                    <div id="video-placeholder" class="placeholder">지도 상의 인프라 마커(빨간 점) 또는<br>하단 채널을 선택하세요</div>
-                    <div id="video-loader" class="placeholder" style="display:none;"><div class="video-loader"></div><span id="video-loader-text" style="color:var(--success); font-weight:bold;">채널 연결 중...</span></div>
-                    <video id="cctv-player" controls autoplay muted playsinline style="display:none;"></video>
-                `;
-                document.getElementById('bottom-bar').innerHTML = '<div class="empty-fav">로컬 데이터 로드 중...</div>';
-                
-                UI.resetWeatherWidget();
-                this.currentLevel = 0;
-                State.fromSearch = false;
-                State.activeRegionName = null;
-                State.currentFocusBounds = null;
-                State.activeCCTV = null;
-                State.activeMarker = null;
-                
-                if (this.geoLayer) { this.geoLayer.clearLayers(); this.map.removeLayer(this.geoLayer); }
-                this.infoLabelLayer.clearLayers();
-                this.cctvLayer.clearLayers();
-                
-                UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
-                this.map.setView([35.8, 127.5], 7);
-                
-                this.renderGeoLayer(CacheStore.sidoGeoJSON, 1);
+                // 가벼운 데이터만 업데이트하고, DOM 박살은 내지 않음
                 this.fetchGlobalWeather();
-                await this.fetchNationwideCCTV();
+                this.fetchFavoritesWeather();
                 
-                // ★ 엔터프라이즈 렌더링 최적화 딜레이 적용
-                setTimeout(() => {
-                    this.renderFavoritesUI(); 
-                }, 150);
+                if (this.currentLevel === 0) {
+                    await this.fetchNationwideCCTV();
+                } else if (this.currentFocusBounds) {
+                    this.fetchActualCCTVData(this.currentFocusBounds, false);
+                    var center = this.currentFocusBounds.getCenter();
+                    this.fetchWeatherData(center.lat, center.lng);
+                }
                 
-                setTimeout(() => UI.hideLoading(), 500);
-                UI.showToast('화면이 쾌적하게 새로고침 되었습니다.', '#10b981');
+                // 하단 영상 리셋 
+                this.resumeFavVideos();
+                
+                setTimeout(() => UI.hideLoading(), 600);
+                UI.showToast('화면이 쾌적하게 갱신되었습니다.', '#10b981');
             },
 
             initMap: function() {
@@ -845,6 +829,7 @@
                         el.classList.toggle('zoom-small', currentZoom < 8);
                     });
 
+                    // 줌 크기에 따라 캔버스 점 크기를 동적 조절
                     var radiusSize = currentZoom < 9 ? 1.5 : (currentZoom < 12 ? 3.5 : 5.5);
                     self.cctvLayer.eachLayer(function(marker) {
                         if(marker !== State.activeMarker) {
@@ -916,7 +901,6 @@
             },
 
             fetchLocalWeather: function(geoJsonLayer) {
-                // 이전 레벨의 마커 삭제 보장
                 this.infoLabelLayer.clearLayers();
                 var self = this;
                 geoJsonLayer.eachLayer(async (layer) => {
@@ -980,12 +964,14 @@
                 } catch (e) {}
             },
 
-            // ★ 관심 지역 렌더링에 실시간 기상 연동
             renderSavedRegions: function() {
                 var container = document.getElementById('quick-chips-container');
                 if(!container) return;
-                container.innerHTML = '';
+                
+                // 성능 최적화: Fragment 사용
+                var fragment = document.createDocumentFragment();
                 var self = this;
+                
                 State.savedRegions.forEach(function(region) {
                     var chipId = 'quick-chip-' + region.name.replace(/[^a-zA-Z0-9가-힣]/g, '');
                     var chip = document.createElement('div');
@@ -993,9 +979,12 @@
                     chip.id = chipId;
                     chip.innerHTML = `<span>${region.name}</span><span class="chip-weather"></span><span class="quick-chip-remove" onclick="App.removeSavedRegion('${region.name}', event)">×</span>`;
                     chip.onclick = () => self.executeDirectSearch(region.name, region.lat, region.lng);
-                    container.appendChild(chip);
+                    fragment.appendChild(chip);
                     self.fetchChipWeather(region, chipId);
                 });
+                
+                container.innerHTML = '';
+                container.appendChild(fragment);
             },
 
             fetchChipWeather: async function(region, chipId) {
@@ -1011,7 +1000,6 @@
                 } catch(e) {}
             },
 
-            // ★ 관심지역(상단 고정) 로직 버그 해결: 확실한 이름 우선 탐색
             saveCurrentRegion: function() {
                 var name = State.activeRegionName;
                 var bounds = State.currentFocusBounds || (this.geoLayer ? this.geoLayer.getBounds() : null);
@@ -1074,7 +1062,7 @@
                 }
             },
 
-            // ★ 즐겨찾기 강제 완전 삭제
+            // ★ 네트워크 무한 로딩/뻗음 방지를 위한 소켓 강제 회수 로직
             clearFavVideos: function() {
                 for (var key in this.favHlsInstances) {
                     if (this.favHlsInstances[key]) {
@@ -1086,12 +1074,11 @@
                 this.favHlsInstances = {};
             },
 
-            // ★ 즐겨찾기 영상 다운로드 일시정지
             pauseFavVideos: function() {
                 this.clearFavVideos();
                 var loaders = document.querySelectorAll('.fav-screen-loading');
                 for (var i = 0; i < loaders.length; i++) {
-                    loaders[i].innerText = '메인 영상 집중 모드';
+                    loaders[i].innerHTML = '메인 영상 집중 모드<br><span style="font-size:9px; color:#fff;">대기 중</span>';
                     loaders[i].style.color = 'var(--success)';
                     loaders[i].style.display = 'block';
                 }
@@ -1104,14 +1091,12 @@
                 }
             },
             
-            // ★ 즐겨찾기 영상 다시 렌더링
             resumeFavVideos: function() {
                 var loaders = document.querySelectorAll('.fav-screen-loading');
                 var hasOffline = false;
                 for (var i = 0; i < loaders.length; i++) {
                     if (loaders[i].innerText.indexOf('집중 모드') !== -1) {
-                        hasOffline = true;
-                        break;
+                        hasOffline = true; break;
                     }
                 }
                 if(hasOffline) {
@@ -1121,7 +1106,7 @@
 
             loadFavorites: function() {
                 try {
-                    // ★ 유저가 저장해둔 즐겨찾기 데이터 완전 복원
+                    // ★ 유저가 저장해둔 즐겨찾기 데이터를 절대 삭제하지 않도록 기존 v8 유지
                     var stored = localStorage.getItem('cctv_fav_v8');
                     if (stored) this.favorites = JSON.parse(stored);
                     else throw new Error('No default');
@@ -1135,7 +1120,6 @@
 
             saveFavorites: function() { localStorage.setItem('cctv_fav_v8', JSON.stringify(this.favorites)); },
 
-            // ★ 채널 추가 로직 복원 완료 (에러 무시하고 강제 저장)
             addCurrentToFavorites: async function() {
                 if (!State.activeCCTV) {
                     UI.showToast('먼저 지도에서 빨간 점(CCTV)을 클릭하세요', '#ef4444');
@@ -1164,18 +1148,18 @@
                 this.saveFavorites(); this.renderFavoritesUI();
             },
 
-            // ★ DOM 렌더링 최적화 및 메인화면 연동 로직
+            // ★ DOM 렌더링 성능 극대화 및 하단 클릭 시 메인 연동 로직
             renderFavoritesUI: function() {
                 var self = this;
                 var bar = document.getElementById('bottom-bar');
-                bar.innerHTML = '';
                 
                 this.clearFavVideos();
 
                 if (this.favorites.length === 0) {
-                    bar.innerHTML = '<div class="empty-fav">⭐ <b>등록된 채널이 없습니다.</b><br>지도에서 🔴빨간 점(CCTV) 선택 후 우측 상단의 <b>[⭐ 즐겨찾기 추가]</b> 버튼을 누르세요.</div>'; return;
+                    bar.innerHTML = '<div class="empty-fav">⭐ <b>등록된 채널이 없습니다.</b><br>지도에서 🔴빨간 점(CCTV) 선택 후 <b>[CCTV 즐겨찾기]</b> 버튼을 누르세요.</div>'; return;
                 }
-
+                
+                bar.innerHTML = '';
                 var fragment = document.createDocumentFragment();
 
                 this.favorites.forEach(function(fav) {
@@ -1183,7 +1167,7 @@
                     card.className = 'fav-card';
                     card.id = 'fav-card-' + fav.id;
                     
-                    // ★ 하단 즐겨찾기 카드 클릭 시 메인 영상으로 즉시 부드럽게 연동되는 로직 복구
+                    // ★ 즐겨찾기 클릭 시 메인뷰어로 해당 지역을 옮기고 영상 재생 
                     card.onclick = function() { 
                         if (State.isEditMode) return; 
                         
@@ -1199,10 +1183,10 @@
                         // 하단 즐겨찾기 영상들의 통신을 100% 끊어서 브라우저 과부하/무한 로딩 차단
                         self.pauseFavVideos(); 
                         
-                        // OS가 메모리 및 소켓을 비울 시간(0.3초)을 준 뒤 메인 영상 재생 (튕김/먹통 원천 차단)
+                        // OS가 메모리 및 소켓을 비울 시간(0.3초)을 준 뒤 메인 영상 쾌적하게 재생
                         setTimeout(function() {
                             self.playCCTVStream(fav.url, { name: fav.name, lat: fav.lat, lng: fav.lng, url: fav.url });
-                            UI.showToast(fav.name + ' 영상을 메인 화면으로 연결합니다.', '#10b981');
+                            UI.showToast(fav.name + ' 영상을 상단 화면에 연결합니다.', '#10b981');
                         }, 300);
                     }; 
                     
@@ -1220,13 +1204,13 @@
                 
                 bar.appendChild(fragment);
 
-                // ★ 엔진 부하를 줄이기 위해 약간의 딜레이 후 즐겨찾기 HLS 로드
+                // 스태거 렌더링으로 부하 분산
                 setTimeout(() => {
                     this.favorites.forEach(fav => self.initFavVideo(fav.id, fav.url));
-                }, 150);
+                }, 100);
             },
 
-            // ★ 영상 무한 로딩 차단 (오토 리커버리)
+            // ★ 네트워크 에러 발생 시 오프라인(연결불가) 방어막
             initFavVideo: function(id, url) {
                 if (!url) return;
                 var secureUrl = url.replace(/^http:\/\//i, 'https://'); 
@@ -1242,16 +1226,18 @@
                     var hls = new Hls({ 
                         enableWorker: false, 
                         lowLatencyMode: true,
-                        manifestLoadingMaxRetry: 2
+                        manifestLoadingMaxRetry: 2 // 실패 시 무한로딩 안하고 바로 캐치
                     }); 
                     hls.loadSource(secureUrl);
                     hls.attachMedia(video);
+                    
                     hls.on(Hls.Events.MANIFEST_PARSED, () => {
                         if (loader) loader.style.display = 'none';
                         video.style.display = 'block';
                         video.play().catch(()=>{});
                     });
                     
+                    // 네트워크 에러 시 백그라운드 뻗음 방지
                     hls.on(Hls.Events.ERROR, function(event, data) {
                         if (data.fatal) {
                             if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
@@ -1261,10 +1247,10 @@
                             } else {
                                 hls.destroy();
                                 if (loader) {
-                                    loader.innerText = '재연결 시도 중...';
+                                    loader.innerHTML = '오프라인<br><span style="font-size:9px; color:#aaa;">연결 불가</span>';
+                                    loader.style.color = 'var(--danger)';
                                     loader.style.display = 'block';
                                 }
-                                setTimeout(() => { if (document.getElementById('fav-video-' + id)) startHls(); }, 5000);
                             }
                         }
                     });
@@ -1321,7 +1307,7 @@
                     style: { color: targetLevel === 1 ? '#3b82f6' : '#a855f7', weight: targetLevel === 1 ? 2 : 1.5, fillOpacity: 0.06 },
                     onEachFeature: function(feature, layer) {
                         layer.on('click', function(e) {
-                            // ★ 줌인 상태(Level 2)에서 빈 땅(폴리곤) 헛클릭 시 튕기는 현상 원천 봉쇄
+                            // ★ 줌인 상태(Level 2)에서 빈 땅(폴리곤) 클릭 시 튕기는 현상 원천 봉쇄
                             if (self.currentLevel === 2) return; 
                             
                             if (targetLevel === 1) self.handleSidoClick(feature.properties.code, feature.properties.name, layer.getBounds());
@@ -1347,7 +1333,6 @@
                 } catch(e) {}
             },
 
-            // ★ 줌인 할 때 이전 렌더링을 굳이 부수지 않고 유지하여 깜빡임 제거
             handleSidoClick: async function(sidoCode, name, bounds) {
                 this.currentLevel = 1; State.fromSearch = false; State.parentSidoCode = null; State.parentSidoName = null; 
                 State.activeRegionName = name; this.currentFocusBounds = bounds; 
@@ -1364,7 +1349,7 @@
                 this.fetchLocalWeather(this.geoLayer);
             },
 
-            // ★ 정확한 지역명으로 변수를 주입하여 오류 차단 및 1개만 표출
+            // ★ 줌인 시 다른 동네 마커를 싹 지워 양양군/인제군 혼동 완전 해결
             handleSigunguClick: function(name, bounds) {
                 this.currentLevel = 2; State.fromSearch = false; 
                 this.currentFocusBounds = bounds; State.activeRegionName = name; 
@@ -1380,7 +1365,7 @@
                 this.fetchWeatherData(center.lat, center.lng); 
             },
 
-            // ★ 검색 시 매칭 로직 개선 (정확한 이름으로 먼저 매칭)
+            // ★ 검색 시 매칭 로직 (이름 정확도 우선)
             executeDirectSearch: function(name, lat, lng, autoPlay, forceUrl) {
                 autoPlay = autoPlay || false; forceUrl = forceUrl || '';
                 if (State.isEditMode) return;
