@@ -302,7 +302,6 @@
         #btn-pip { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.1); display: none;}
         #btn-fullscreen { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.1); display: none;}
         
-        /* ★ 메인 화면 수동 갱신 버튼 디자인 */
         #btn-main-refresh {
             background: rgba(59, 130, 246, 0.5); 
             color: #fff; 
@@ -535,7 +534,7 @@
 <body>
     <div id="header">
         <span id="current-location-text">동기화 완료 · 지역을 선택하세요</span>
-        <div class="version-tag">v3.1</div> <!-- ★ 업데이트 식별자 -->
+        <div class="version-tag">v3.2</div> <!-- ★ 강력 갱신 빌드 식별자 -->
         <div class="btn-group">
             <button id="btn-refresh" onclick="App.softRefresh()" title="빈 화면 시 새로고침">🔄 새로고침</button>
             <button onclick="App.goBack()">이전</button>
@@ -582,7 +581,7 @@
                         <span id="video-badge" class="video-badge">대기</span>
                     </div>
                     <div class="video-controls">
-                        <!-- ★ 메인 화면 수동 갱신 버튼 추가 -->
+                        <!-- ★ 메인 화면 수동 갱신 버튼 -->
                         <button id="btn-main-refresh" class="action-btn" onclick="App.refreshMainVideo()" style="display:none; background:rgba(59, 130, 246, 0.5); color:#fff; border:1px solid rgba(59, 130, 246, 0.8);">🔄 갱신</button>
                         <button id="btn-pip" class="action-btn" onclick="App.togglePIP()" title="팝업 모드">PIP</button>
                         <button id="btn-fullscreen" class="action-btn" onclick="App.toggleFullscreen()">전체화면</button>
@@ -863,7 +862,6 @@
                 this.startAutoSync();
             },
 
-            // ★ 소프트 새로고침: 메모리 누수 방지를 위한 완전 하드 리셋
             softRefresh: async function() {
                 if(State.refreshTimer) clearTimeout(State.refreshTimer);
                 
@@ -1170,7 +1168,7 @@
                 }
             },
             
-            // ★ 즐겨찾기를 메인으로 올리지 않고 다이렉트로 꽉찬 화면 송출
+            // ★ 즐겨찾기 강제 전체화면 기능 
             fullscreenFav: function(id, event) {
                 if(event) event.stopPropagation();
                 if (State.isEditMode) return;
@@ -1246,7 +1244,6 @@
                 this.saveFavorites(); this.renderFavoritesUI();
             },
 
-            // ★ 100% 무중단 독립 재생 렌더링 (대기 모드 완전 폐지)
             renderFavoritesUI: function() {
                 var self = this;
                 var bar = document.getElementById('bottom-bar');
@@ -1265,6 +1262,17 @@
                     card.className = 'fav-card';
                     card.id = 'fav-card-' + fav.id;
                     
+                    card.onclick = function(e) { 
+                        if (State.isEditMode) return; 
+                        var loader = document.getElementById('loader-' + fav.id);
+                        if(loader) {
+                            loader.innerHTML = '<div class="video-loader" style="width:20px; height:20px; border-width:2px; margin-bottom:6px;"></div><span style="font-size:11px; color:var(--success); font-weight:bold;">채널 연결 중...</span>';
+                            loader.style.display = 'flex';
+                        }
+                        self.autoRefreshFavoriteUrl(fav.id, fav.name);
+                    }; 
+                    
+                    // ★ 카드에서 확대(메인) 버튼을 꽉찬화면(전체화면) 버튼으로 대체
                     card.innerHTML =
                         `<button class="fav-remove" onclick="App.removeFavorite('${fav.id}', event)">삭제</button>
                         <div class="fav-screen">
@@ -1293,7 +1301,8 @@
                 });
             },
 
-            refreshFavoriteUrl: async function(id, name, event) {
+            // ★ 즐겨찾기 수동 갱신 (네트워크 지연 무한 로딩 해결)
+            refreshFavoriteUrl: async function(id, name, event, attempt = 1) {
                 if (event) event.stopPropagation();
                 if (State.isEditMode) return;
 
@@ -1301,7 +1310,7 @@
                 if(!fav) return;
 
                 var loader = document.getElementById('loader-' + id);
-                if(loader) { 
+                if(loader && attempt === 1) { 
                     loader.innerHTML = '<div class="video-loader" style="width:20px; height:20px; border-width:2px; margin-bottom:6px;"></div><span style="font-size:11px; color:var(--success);">수동 갱신 중...</span>'; 
                     loader.style.display = 'flex'; 
                 }
@@ -1314,7 +1323,8 @@
                 
                 try {
                     var proxyUrl = CONFIG.API.PROXY_BASE + encodeURIComponent(CONFIG.API.ITS_BASE + q);
-                    var res = await fetchWithTimeout(proxyUrl, { timeout: 6000 });
+                    // 타임아웃 10초 적용
+                    var res = await fetchWithTimeout(proxyUrl, { timeout: 10000 });
                     var rawData = await res.text();
                     var cctvDataArray = await parseITSDataAsync(rawData);
                     
@@ -1329,7 +1339,12 @@
                         if(loader) loader.innerHTML = '<span style="color:var(--danger)">서버에 영상 없음</span>';
                     }
                 } catch(e) {
-                     if(loader) loader.innerHTML = '<span style="color:var(--danger)">통신 지연 (재시도 요망)</span>';
+                     // 1회 실패 시 포기하지 않고 백그라운드 재시도
+                     if (attempt < 2) {
+                         setTimeout(() => this.refreshFavoriteUrl(id, name, null, attempt + 1), 1000);
+                         return;
+                     }
+                     if(loader) loader.innerHTML = '<span style="color:var(--danger); font-weight:bold;">서버 통신 지연</span><br><span style="font-size:9px; color:#aaa;">터치하여 재시도</span>';
                 }
             },
 
@@ -1416,7 +1431,7 @@
                 }
             },
 
-            autoRefreshFavoriteUrl: async function(id, name) {
+            autoRefreshFavoriteUrl: async function(id, name, attempt = 1) {
                 var fav = this.favorites.find(f => f.id === id);
                 if(!fav) return;
 
@@ -1428,7 +1443,7 @@
                 
                 try {
                     var proxyUrl = CONFIG.API.PROXY_BASE + encodeURIComponent(CONFIG.API.ITS_BASE + q);
-                    var res = await fetchWithTimeout(proxyUrl, { timeout: 6000 });
+                    var res = await fetchWithTimeout(proxyUrl, { timeout: 10000 });
                     var rawData = await res.text();
                     var cctvDataArray = await parseITSDataAsync(rawData);
                     
@@ -1442,11 +1457,16 @@
                         if(loader) { loader.innerHTML = '<span style="color:var(--danger)">서버 영상 없음</span><br><span style="font-size:9px; color:#aaa;">CCTV 점검 중</span>'; }
                     }
                 } catch(e) {
-                    setTimeout(() => this.autoRefreshFavoriteUrl(id, name), 5000);
+                    if (attempt < 2) {
+                        setTimeout(() => this.autoRefreshFavoriteUrl(id, name, attempt + 1), 1000);
+                        return;
+                    }
+                    var loader = document.getElementById('loader-' + id);
+                    if(loader) { loader.innerHTML = '<span style="color:var(--danger); font-weight:bold;">서버 통신 지연</span><br><span style="font-size:9px; color:#aaa;">터치하여 재연결</span>'; }
                 }
             },
 
-            // ★ 메인 뷰어 수동 갱신 버튼 로직
+            // ★ 메인 화면 수동 갱신 락 해제
             refreshMainVideo: function() {
                 if (!State.activeCCTV) return;
                 var placeholder = document.getElementById('main-loader');
@@ -1457,14 +1477,14 @@
                 var badge = document.getElementById('video-badge');
                 if(badge) { badge.innerText = 'RENEW'; badge.className = 'video-badge'; }
                 
-                UI.showToast('메인 영상을 갱신합니다.', '#3b82f6');
+                UI.showToast('메인 영상을 최신 상태로 갱신합니다.', '#3b82f6');
                 
-                // 새로운 streamSeq를 발급하여 기존 꼬인 비동기를 모두 무력화
                 State.streamSeq++; 
+                State.refreshingMainUrl = false; // 락을 강제로 부수고 실행
                 this.autoRefreshMainUrl(State.activeCCTV, State.streamSeq);
             },
 
-            autoRefreshMainUrl: async function(cctvObj, streamToken) {
+            autoRefreshMainUrl: async function(cctvObj, streamToken, attempt = 1) {
                 if (streamToken !== undefined && streamToken !== State.streamSeq) return;
                 if (State.refreshingMainUrl) return;
                 State.refreshingMainUrl = true;
@@ -1480,7 +1500,8 @@
                     State.mainAbortController = new AbortController();
 
                     var proxyUrl = CONFIG.API.PROXY_BASE + encodeURIComponent(CONFIG.API.ITS_BASE + q);
-                    var res = await fetchWithTimeout(proxyUrl, { timeout: 6000, customSignal: State.mainAbortController });
+                    // 타임아웃 10초 상향
+                    var res = await fetchWithTimeout(proxyUrl, { timeout: 10000, customSignal: State.mainAbortController });
                     var rawData = await res.text();
                     var cctvDataArray = await parseITSDataAsync(rawData);
                     
@@ -1507,9 +1528,17 @@
                     }
                 } catch(e) {
                     if (e.name === 'AbortError') return; 
+                    
+                    // 1회 실패시 사용자 몰래 재시도
+                    if (attempt < 2) {
+                        State.refreshingMainUrl = false;
+                        setTimeout(() => this.autoRefreshMainUrl(cctvObj, streamToken, attempt + 1), 1000);
+                        return;
+                    }
+
                     var placeholder = document.getElementById('main-loader');
                     if(placeholder) {
-                        placeholder.innerHTML = '<span style="color:var(--danger); font-weight:bold;">서버 통신 지연</span><br><span style="font-size:11px; color:#aaa;">네트워크를 확인하세요</span>';
+                        placeholder.innerHTML = '<span style="color:var(--danger); font-weight:bold;">서버 통신 지연</span><br><span style="font-size:11px; color:#aaa;">네트워크 연결 불안정. 다시 갱신하세요.</span>';
                     }
                 } finally {
                     State.refreshingMainUrl = false;
@@ -1909,7 +1938,7 @@
                                         placeholder.style.display = 'flex';
                                     }
                                     try { hls.stopLoad(); hls.detachMedia(); hls.destroy(); } catch(e) {}
-                                    if (self.hlsInstance === hls) self.hlsInstance = null;
+                                    if (self.hlsInstance === hls) { self.hlsInstance = null; }
                                     renewUrl(500);
                                 }
                                 break;
@@ -1926,13 +1955,14 @@
                                     placeholder.style.display = 'flex';
                                 }
                                 try { hls.stopLoad(); hls.detachMedia(); hls.destroy(); } catch(e) {}
-                                if (self.hlsInstance === hls) self.hlsInstance = null;
+                                if (self.hlsInstance === hls) { self.hlsInstance = null; }
                                 renewUrl(800);
                                 break;
                         }
                     });
 
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+
                     video.src = secureStreamUrl;
 
                     video.addEventListener('loadedmetadata', function() {
@@ -1962,6 +1992,7 @@
                             renewUrl(500);
                         }
                     });
+
                 } else {
                     clearWatchdog();
                     if (placeholder) {
@@ -1990,7 +2021,7 @@
                 var badge = document.getElementById('video-badge');
                 if (badge) { badge.innerText = '대기'; badge.className = 'video-badge'; }
                 
-                State.streamSeq++; // 비동기 취소
+                State.streamSeq++; 
                 if(State.mainAbortController) { State.mainAbortController.abort(); State.mainAbortController = null; }
                 State.refreshingMainUrl = false;
                 
