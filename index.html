@@ -68,10 +68,8 @@
             justify-content: space-between;
             z-index: 20;
             box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-            position: relative;
+            transform: translateZ(0);
         }
-        
-        /* ★ 우측 상단 버전 표기 */
         .version-tag {
             position: absolute;
             top: 4px;
@@ -136,6 +134,7 @@
             align-items: center;
             gap: 6px;
             transition: all 0.2s;
+            will-change: transform;
         }
         .quick-chip:active { background: rgba(255,255,255,0.15); border-color: var(--accent); transform: scale(0.96); }
         .quick-chip-remove { color: var(--danger); font-size: 15px; font-weight: bold; line-height: 1; margin-top:-2px; margin-left:4px;}
@@ -187,6 +186,7 @@
             gap: 14px;
             overflow-y: auto;
             min-width: 320px;
+            transform: translateZ(0);
         }
 
         #weather-widget {
@@ -356,6 +356,23 @@
             justify-content: center;
         }
 
+        .cctv-dot {
+            width: 16px; height: 16px;
+            background: #ff2a2a;
+            border-radius: 50%;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 10px rgba(255, 42, 42, 0.9), 0 2px 4px rgba(0,0,0,0.6);
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+            touch-action: manipulation; 
+        }
+        .cctv-dot.active {
+            background: var(--success);
+            box-shadow: 0 0 15px var(--success), 0 3px 6px rgba(0,0,0,0.6);
+            transform: scale(1.4);
+            z-index: 1000 !important;
+        }
+
         #bottom-panel {
             flex: 0 0 200px;
             background: rgba(11, 15, 20, 0.95);
@@ -412,7 +429,9 @@
             position: relative;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             transition: transform 0.2s ease, border-color 0.3s ease;
+            will-change: transform;
         }
+        .fav-card:active { transform: scale(0.97); }
         .fav-screen {
             height: 90px;
             background: #000;
@@ -424,8 +443,8 @@
             overflow: hidden;
         }
         
-        /* ★ 하단 즐겨찾기 로딩 박스 */
-        .fav-screen-loading { 
+        /* ★ 하단 즐겨찾기 오버레이 (대기/클릭 유도) */
+        .fav-screen-overlay { 
             position: absolute; inset: 0; z-index: 2; background: #000;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.6); text-align: center; line-height: 1.5; 
@@ -449,15 +468,6 @@
         }
         #bottom-bar.edit-mode .fav-remove { display: block; }
         
-        .fav-action-bar {
-            position: absolute; bottom: 5px; left: 5px; z-index: 5; display: flex; gap: 4px;
-        }
-        .fav-btn {
-            background: rgba(0,0,0,0.8); color: #fff; border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 4px; padding: 3px 6px; font-size: 10px; font-weight: bold; cursor: pointer;
-        }
-        .fav-btn:active { background: var(--accent); }
-
         .empty-fav {
             color: var(--muted);
             font-size: 13px;
@@ -509,7 +519,7 @@
 <body>
     <div id="header">
         <span id="current-location-text">동기화 완료 · 지역을 선택하세요</span>
-        <div class="version-tag">v1.6</div> <!-- ★ 업데이트 식별자 -->
+        <div class="version-tag">v1.7</div>
         <div class="btn-group">
             <button id="btn-refresh" onclick="App.softRefresh()" title="빈 화면 시 새로고침">🔄 새로고침</button>
             <button onclick="App.goBack()">이전</button>
@@ -563,11 +573,8 @@
                 </div>
                 <div id="video-content">
                     <div id="video-placeholder" class="placeholder">지도 상의 인프라 마커(빨간 점) 또는<br>하단 채널을 선택하세요</div>
-                    <div id="main-loader" class="placeholder" style="display:none; z-index:2; background:#000;">
-                        <div class="video-loader" style="margin-bottom:8px;"></div>
-                        <span id="main-loader-text" style="color:var(--success); font-weight:bold;">채널 연결 중...</span>
-                    </div>
-                    <video id="cctv-player" controls autoplay muted playsinline style="display:none; opacity:0; transition:opacity 0.4s ease; width:100%; height:100%; position:absolute; inset:0; z-index:1; object-fit:cover;"></video>
+                    <div id="main-loader" class="placeholder" style="display:none; z-index:2; background:#000;"><div class="video-loader"></div><span id="main-loader-text" style="color:var(--success); font-weight:bold; margin-top:8px;">채널 연결 중...</span></div>
+                    <video id="cctv-player" controls autoplay muted playsinline style="display:none; opacity:0; transition:opacity 0.4s ease; width:100%; height:100%; position:absolute; inset:0; z-index:1; object-fit:cover; transform: translateZ(0);"></video>
                 </div>
             </div>
         </div>
@@ -661,9 +668,11 @@
             parentSidoName: null, parserWorker: null, hlsRetryCount: 0,
             currentCCTVs: [], nationwideCCTVs: [], renderedCCTVs: new Set(),
             cctvClickTimer: null, activeMarker: null, 
+            nativeMainRetryCount: 0, 
             savedRegions: JSON.parse(localStorage.getItem('cctv_saved_regions_v6') || '[]')
         };
 
+        // 타일 로딩 최적화를 위한 캔버스 렌더러
         const canvasRenderer = L.canvas({ padding: 0.5 });
 
         const UI = {
@@ -804,18 +813,20 @@
                 this.startAutoSync();
             },
 
+            // ★ 소프트 새로고침: 메모리 릭(검은화면) 완벽 차단을 위한 DOM 하드 리셋
             softRefresh: async function() {
                 UI.showLoading('시스템 재동기화 중...');
                 
-                this.clearFavVideos();
+                // 메인 뷰어 클리어
                 if (this.hlsInstance) { this.hlsInstance.destroy(); this.hlsInstance = null; }
-                
+                var videoEl = document.getElementById('cctv-player');
+                if (videoEl) { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); }
+
                 document.getElementById('video-content').innerHTML = `
                     <div id="video-placeholder" class="placeholder">지도 상의 인프라 마커(빨간 점) 또는<br>하단 채널을 선택하세요</div>
                     <div id="main-loader" class="placeholder" style="display:none; z-index:2; background:#000;"><div class="video-loader"></div><span id="main-loader-text" style="color:var(--success); font-weight:bold; margin-top:8px;">채널 연결 중...</span></div>
-                    <video id="cctv-player" controls autoplay muted playsinline style="display:none; opacity:0; transition:opacity 0.4s ease; width:100%; height:100%; position:absolute; inset:0; z-index:1; object-fit:cover;"></video>
+                    <video id="cctv-player" controls autoplay muted playsinline style="display:none; opacity:0; transition:opacity 0.4s ease; width:100%; height:100%; position:absolute; inset:0; z-index:1; object-fit:cover; transform: translateZ(0);"></video>
                 `;
-                document.getElementById('bottom-bar').innerHTML = '<div class="empty-fav">로컬 데이터 로드 중...</div>';
                 
                 UI.resetWeatherWidget();
                 this.currentLevel = 0;
@@ -825,6 +836,7 @@
                 State.activeCCTV = null;
                 State.activeMarker = null;
                 State.renderedCCTVs.clear();
+                State.nativeMainRetryCount = 0;
                 
                 if (this.geoLayer) { this.geoLayer.clearLayers(); this.map.removeLayer(this.geoLayer); }
                 this.infoLabelLayer.clearLayers();
@@ -837,9 +849,8 @@
                 this.fetchGlobalWeather();
                 await this.fetchNationwideCCTV();
                 
-                setTimeout(() => {
-                    this.renderFavoritesUI(); 
-                }, 150);
+                // ★ 즐겨찾기 강제 초기화 및 재생성
+                this.renderFavoritesUI();
                 
                 setTimeout(() => UI.hideLoading(), 500);
                 UI.showToast('화면이 쾌적하게 새로고침 되었습니다.', '#10b981');
@@ -851,7 +862,8 @@
                     zoomControl: false, renderer: canvasRenderer,
                     fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false
                 });
-                L.tileLayer(CONFIG.API.MAP_TILE, { attribution: '© VWorld', maxZoom: 18, updateWhenIdle: true, keepBuffer: 2 }).addTo(this.map);
+                // ★ 타일 렌더링 최적화
+                L.tileLayer(CONFIG.API.MAP_TILE, { attribution: '© VWorld', maxZoom: 18, updateWhenZooming: false, updateWhenIdle: true, keepBuffer: 4 }).addTo(this.map);
                 L.control.zoom({ position: 'bottomright' }).addTo(this.map);
 
                 this.cctvLayer = L.featureGroup().addTo(this.map);
@@ -1091,6 +1103,7 @@
                 }
             },
 
+            // 하단 즐겨찾기 엔진 파괴 함수
             clearFavVideos: function() {
                 for (var key in this.favHlsInstances) {
                     if (this.favHlsInstances[key]) {
@@ -1145,64 +1158,7 @@
                 this.saveFavorites(); this.renderFavoritesUI();
             },
 
-            autoRefreshFavoriteUrl: async function(id, name) {
-                var fav = this.favorites.find(f => f.id === id);
-                if(!fav) return;
-
-                var minX = (fav.lng - 0.05).toFixed(5);
-                var maxX = (fav.lng + 0.05).toFixed(5);
-                var minY = (fav.lat - 0.05).toFixed(5);
-                var maxY = (fav.lat + 0.05).toFixed(5);
-                var q = '?apiKey=' + CONFIG.API.ITS_KEY + '&type=ex&cctvType=1&minX=' + minX + '&maxX=' + maxX + '&minY=' + minY + '&maxY=' + maxY + '&getType=json';
-                
-                try {
-                    var proxyUrl = CONFIG.API.PROXY_BASE + encodeURIComponent(CONFIG.API.ITS_BASE + q);
-                    var res = await fetchWithTimeout(proxyUrl, { timeout: 6000 });
-                    var rawData = await res.text();
-                    var cctvDataArray = await parseITSDataAsync(rawData);
-                    
-                    var match = cctvDataArray.find(c => c.cctvname === name);
-                    if(match && match.cctvurl) {
-                        fav.url = match.cctvurl; 
-                        this.saveFavorites(); 
-                        this.initFavVideo(id, fav.url); 
-                    } else {
-                        var loader = document.getElementById('loader-' + id);
-                        if(loader) { loader.innerHTML = '<span style="color:var(--danger)">서버 영상 없음</span><br><span style="font-size:9px; color:#aaa;">CCTV 점검 중</span>'; }
-                    }
-                } catch(e) {
-                    var loader = document.getElementById('loader-' + id);
-                    if(loader) { loader.innerHTML = '<span style="color:var(--danger)">서버 응답 없음</span><br><span style="font-size:9px; color:#aaa;">재연결 대기 중</span>'; }
-                }
-            },
-
-            // ★ 클릭 시 가장 최신의 라이브 주소로 알아서 갱신 후 메인화면에 띄우는 오토매틱 매핑
-            sendFavToMain: function(id, event) {
-                if (event) event.stopPropagation();
-                if (State.isEditMode) return;
-                
-                var fav = this.favorites.find(f => f.id === id);
-                if(!fav) return;
-
-                if(State.cctvClickTimer) clearTimeout(State.cctvClickTimer);
-                
-                document.getElementById('video-title').innerText = '[송출] ' + fav.name;
-                document.getElementById('btn-fav-add').style.display = 'none'; 
-                
-                if (this.map) {
-                    this.map.setView([fav.lat, fav.lng], 12, { animate: true });
-                }
-                
-                UI.showToast(fav.name + ' 영상을 메인 화면으로 연결합니다.', '#10b981');
-                
-                // ★ 고객님의 요청: 즐겨찾기 영상 클릭 시 아예 최신 주소로 다시 API를 찔러 갱신(오류 무력화)
-                this.autoRefreshMainUrl({ name: fav.name, lat: fav.lat, lng: fav.lng, url: fav.url });
-                
-                // 비디오가 멈춰있을 수 있으므로 하단 비디오도 살짝 깨워줌
-                var vid = document.getElementById('fav-video-' + id);
-                if(vid && vid.paused) vid.play().catch(()=>{});
-            },
-
+            // ★ DOM 성능 최적화를 통한 하단 즐겨찾기 고속 렌더링
             renderFavoritesUI: function() {
                 var self = this;
                 var bar = document.getElementById('bottom-bar');
@@ -1221,11 +1177,31 @@
                     card.className = 'fav-card';
                     card.id = 'fav-card-' + fav.id;
                     
-                    // ★ 카드 자체를 누를 때 갱신 동작 없이 하단 비디오만 다시 재생 시도
+                    // ★ 하단 카드 클릭 시: 메인으로 쏘는 것과 동일하게 API 새로 찔러서 강제 재생 (네트워크 무한 지연 100% 돌파)
                     card.onclick = function(e) { 
                         if (State.isEditMode) return; 
-                        var vid = document.getElementById('fav-video-' + fav.id);
-                        if(vid && vid.paused) vid.play().catch(()=>{});
+                        
+                        // 하단 즐겨찾기가 뻘짓하고 있는 통신을 전부 파괴 (브라우저 소켓 여유 확보)
+                        self.clearFavVideos();
+                        var loaders = document.querySelectorAll('.fav-screen-loading');
+                        loaders.forEach(l => { 
+                            l.innerHTML = '▶ 재생 대기<br><span style="font-size:9px; color:#aaa;">터치 시 메인에서 재생</span>'; 
+                            l.style.display='flex'; 
+                        });
+                        document.querySelectorAll('.fav-screen video').forEach(v => { v.style.opacity='0'; });
+                        
+                        if(State.cctvClickTimer) clearTimeout(State.cctvClickTimer);
+                        document.getElementById('video-title').innerText = '[송출] ' + fav.name;
+                        document.getElementById('btn-fav-add').style.display = 'none'; 
+                        
+                        if (self.map) {
+                            self.map.setView([fav.lat, fav.lng], 12, { animate: true });
+                        }
+                        
+                        UI.showToast(fav.name + ' 채널 연결 중...', '#f59e0b');
+                        
+                        // ★ 마커를 클릭한 것과 완전히 똑같이, 서버에서 최신 주소를 새로 발급받아 메인화면에 때려넣음
+                        self.autoRefreshMainUrl({ name: fav.name, lat: fav.lat, lng: fav.lng, url: fav.url });
                     }; 
                     
                     card.innerHTML =
@@ -1235,11 +1211,7 @@
                                 <div class="video-loader" style="width:20px; height:20px; border-width:2px; margin-bottom:6px;"></div>
                                 <span style="font-size:11px; color:var(--success); font-weight:bold;">영상 연결 중...</span>
                             </div>
-                            <!-- ★ opacity: 0 으로 백그라운드에서 다운로드 한 후 준비완료 시 화면 표출 -->
-                            <video id="fav-video-${fav.id}" autoplay muted playsinline style="display:block; opacity:0; transition: opacity 0.5s; width:100%; height:100%; object-fit:cover; position:absolute; inset:0; z-index:1;"></video>
-                            <div class="fav-action-bar">
-                                <button class="fav-btn" style="color:#111; background:rgba(245,158,11,0.9); border-color:#f59e0b;" onclick="App.sendFavToMain('${fav.id}', event)">🔼 메인보기</button>
-                            </div>
+                            <video id="fav-video-${fav.id}" autoplay muted playsinline style="display:block; opacity:0; transition: opacity 0.5s; width:100%; height:100%; object-fit:cover; position:absolute; inset:0; z-index:1; transform: translateZ(0);"></video>
                             <div class="fav-live-tag" style="top:5px; left:5px; right:auto; bottom:auto;">LIVE</div>
                             <div class="fav-name-tag" style="top:5px; right:5px; bottom:auto;">${fav.name}</div>
                         </div>
@@ -1249,16 +1221,16 @@
                 
                 bar.appendChild(fragment);
 
-                // ★ 모든 영상을 0.5초 간격으로 순차 렌더링 시켜 트래픽 병목 파괴
+                // ★ 과부하 방지를 위한 0.5초 간격 순차적 릴레이 로딩 (브라우저 소켓 병목 파괴)
                 this.favorites.forEach(function(fav, index) {
                     setTimeout(function() {
-                        self.initFavVideo(fav.id, fav.url);
+                        self.playFavoriteVideoBackground(fav.id, fav.url, fav.name);
                     }, index * 500);
                 });
             },
 
-            // ★ 네트워크 오토 리커버리 및 display none 버그 해결
-            initFavVideo: function(id, url) {
+            // ★ 백그라운드 즐겨찾기 전용 플레이어 (에러 시 무한 대기 대신 확실한 안내 표출)
+            playFavoriteVideoBackground: function(id, url, favName) {
                 if (!url) return;
                 var secureUrl = url.replace(/^http:\/\//i, 'https://'); 
                 var video = document.getElementById('fav-video-' + id);
@@ -1266,8 +1238,6 @@
                 if (!video) return;
 
                 var self = this;
-                var favName = this.favorites.find(f => f.id === id)?.name || '';
-
                 var startHls = () => {
                     if (self.favHlsInstances[id]) {
                         self.favHlsInstances[id].destroy();
@@ -1275,12 +1245,13 @@
                     var hls = new Hls({ 
                         enableWorker: false, 
                         lowLatencyMode: true,
-                        manifestLoadingMaxRetry: 1 
+                        manifestLoadingMaxRetry: 1, // 실패 시 바로 이유 알려줌
+                        maxBufferLength: 8
                     }); 
+                    
                     hls.loadSource(secureUrl);
                     hls.attachMedia(video);
                     
-                    // 영상이 화면에 뜰 준비가 되면 로더를 지움
                     video.addEventListener('canplay', () => {
                         if (loader) loader.style.display = 'none';
                         video.style.opacity = '1';
@@ -1292,17 +1263,16 @@
                         if (data.fatal) {
                             if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
                                 if (loader) {
-                                    loader.innerHTML = '<span style="color:var(--accent2); font-weight:bold;">네트워크 지연</span><br><span style="font-size:9px; color:#aaa;">재연결 시도 중...</span>';
+                                    loader.innerHTML = '<span style="color:var(--accent2); font-weight:bold;">네트워크 지연</span><br><span style="font-size:9px; color:#aaa;">터치하여 메인 재생 시도</span>';
                                 }
-                                setTimeout(() => { if (self.favHlsInstances[id]) hls.startLoad(); }, 3000); 
+                                hls.destroy();
                             } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
                                 hls.recoverMediaError(); 
                             } else {
                                 hls.destroy();
                                 if (loader) {
-                                    loader.innerHTML = '🔄<br><span style="font-size:10px; color:var(--success)">주소 자동 갱신 중...</span>';
+                                    loader.innerHTML = '<span style="color:var(--danger); font-weight:bold;">주소 만료됨</span><br><span style="font-size:9px; color:#aaa;">터치하여 즉시 갱신/재생</span>';
                                 }
-                                self.autoRefreshFavoriteUrl(id, favName); 
                             }
                         }
                     });
@@ -1313,11 +1283,58 @@
                     startHls();
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = secureUrl;
-                    video.addEventListener('loadeddata', () => video.play().catch(()=>{}));
+                    video.addEventListener('error', () => {
+                        if (loader) {
+                            loader.innerHTML = '<span style="color:var(--danger); font-weight:bold;">주소 만료됨</span><br><span style="font-size:9px; color:#aaa;">터치하여 즉시 갱신/재생</span>';
+                        }
+                    });
+                    video.addEventListener('loadedmetadata', () => video.play().catch(()=>{}));
                     video.addEventListener('canplay', () => {
                         if (loader) loader.style.display = 'none';
                         video.style.opacity = '1';
                     });
+                }
+            },
+
+            // ★ 메인 뷰어 무한 로딩 해결 & 예외 처리 세분화 (자동 주소 갱신)
+            autoRefreshMainUrl: async function(cctvObj) {
+                var minX = (cctvObj.lng - 0.05).toFixed(5);
+                var maxX = (cctvObj.lng + 0.05).toFixed(5);
+                var minY = (cctvObj.lat - 0.05).toFixed(5);
+                var maxY = (cctvObj.lat + 0.05).toFixed(5);
+                var q = '?apiKey=' + CONFIG.API.ITS_KEY + '&type=ex&cctvType=1&minX=' + minX + '&maxX=' + maxX + '&minY=' + minY + '&maxY=' + maxY + '&getType=json';
+                try {
+                    var proxyUrl = CONFIG.API.PROXY_BASE + encodeURIComponent(CONFIG.API.ITS_BASE + q);
+                    var res = await fetchWithTimeout(proxyUrl, { timeout: 6000 });
+                    var rawData = await res.text();
+                    var cctvDataArray = await parseITSDataAsync(rawData);
+                    
+                    var match = cctvDataArray.find(c => c.cctvname === cctvObj.name);
+                    if(match && match.cctvurl) {
+                        cctvObj.url = match.cctvurl;
+                        
+                        // ★ 백그라운드 즐겨찾기 스토리지도 가장 최신 주소로 몰래 덮어씌움
+                        var fav = this.favorites.find(f => f.name === cctvObj.name);
+                        if(fav) {
+                            fav.url = cctvObj.url;
+                            this.saveFavorites();
+                        }
+                        
+                        this.playCCTVStream(cctvObj.url, cctvObj);
+                        UI.showToast('스트림을 최신 상태로 갱신했습니다.', '#10b981');
+                    } else {
+                        UI.showToast('CCTV 서버에서 영상 송출을 중단했습니다.', '#ef4444');
+                        var placeholder = document.getElementById('main-loader');
+                        if(placeholder) {
+                            placeholder.innerHTML = '<span style="color:var(--danger); font-weight:bold;">영상 제공 중단됨</span><br><span style="font-size:11px; color:#aaa;">(국가교통정보센터 점검 등)</span>';
+                        }
+                    }
+                } catch(e) {
+                    UI.showToast('CCTV 서버 응답 지연', '#ef4444');
+                    var placeholder = document.getElementById('main-loader');
+                    if(placeholder) {
+                        placeholder.innerHTML = '<span style="color:var(--danger); font-weight:bold;">서버 응답 지연</span><br><span style="font-size:11px; color:#aaa;">잠시 후 다시 시도해주세요</span>';
+                    }
                 }
             },
 
@@ -1359,7 +1376,8 @@
                     style: { color: targetLevel === 1 ? '#3b82f6' : '#a855f7', weight: targetLevel === 1 ? 2 : 1.5, fillOpacity: 0.06 },
                     onEachFeature: function(feature, layer) {
                         layer.on('click', function(e) {
-                            if (self.currentLevel === 2) return; 
+                            // ★ 줌인 상태(Level 2)에서 빈 땅 클릭 시 튕기는 현상 원천 봉쇄!
+                            if (self.currentLevel >= 2) return; 
                             
                             if (targetLevel === 1) self.handleSidoClick(feature.properties.code, feature.properties.name, layer.getBounds());
                             else self.handleSigunguClick(feature.properties.name, layer.getBounds());
@@ -1536,7 +1554,7 @@
                 } finally { UI.hideLoading(); }
             },
 
-            // ★ 마커 영구 유지 및 이벤트 버블링 방지
+            // ★ 이벤트 버블링(맵 튕김 현상) 완벽 차단 로직 적용
             renderCCTVDots: function(cctvArray, autoPlay, isNationwide = false) {
                 autoPlay = autoPlay || false; var self = this;
                 var currentZoom = this.map.getZoom();
@@ -1556,7 +1574,7 @@
                     });
                     
                     marker.on('click', function(e) {
-                        L.DomEvent.stopPropagation(e); 
+                        L.DomEvent.stopPropagation(e); // ★ 이 코드가 지도가 하위 지역으로 강제 튕기는 것을 완벽히 막아줌
                         if(State.cctvClickTimer) clearTimeout(State.cctvClickTimer);
                         State.cctvClickTimer = setTimeout(() => {
                             var z = self.map.getZoom();
@@ -1569,6 +1587,7 @@
                             document.getElementById('video-title').innerText = `[송출] ${cctv.cctvname}`;
                             document.getElementById('btn-fav-add').style.display = 'inline-block'; 
                             
+                            // 마커 클릭 시 메인에 띄움. (하단 즐겨찾기는 중지하지 않고 병행 재생되도록 유지)
                             self.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
                         }, 200); 
                     });
@@ -1579,6 +1598,7 @@
                 });
             },
 
+            // ★ 워치독 기반 오토 리커버리 및 메모리 누수 제어 적용
             playCCTVStream: function(streamUrl, cctvObj) {
                 var wrapper = document.getElementById('video-content'); var badge = document.getElementById('video-badge');
                 State.activeCCTV = cctvObj; State.hlsRetryCount = 0;
@@ -1615,9 +1635,10 @@
                             this.hlsInstance = null;
                             badge.innerText = 'TIMEOUT';
                             if(placeholder) {
-                                placeholder.innerHTML = '<span style="color:var(--danger); font-weight:bold;">서버 응답 지연</span><br><span style="font-size:11px; color:#aaa;">자동 복구 중...</span>';
+                                placeholder.innerHTML = '<span style="color:var(--danger); font-weight:bold;">서버 응답 없음 (Timeout)</span><br><span style="font-size:11px; color:#aaa;">CCTV 센터 통신 지연 중...</span>';
                                 placeholder.style.display = 'flex';
                             }
+                            // 타임아웃 시 최신 주소 갱신 트리거
                             this.autoRefreshMainUrl(cctvObj);
                         }
                     }, 8000);
@@ -1659,7 +1680,7 @@
                                     if (self.hlsInstance) self.hlsInstance.recoverMediaError(); break;
                                 default:
                                     badge.innerText = 'RENEW'; 
-                                    UI.showToast('스트림을 갱신합니다.', '#f59e0b');
+                                    UI.showToast('스트림 권한 만료. 갱신을 시도합니다.', '#f59e0b');
                                     if (self.hlsInstance) self.hlsInstance.destroy();
                                     if (placeholder) {
                                         placeholder.innerHTML = '<div class="video-loader"></div><span style="color:var(--success); font-weight:bold; margin-top:8px;">최신 주소 갱신 중...</span>';
@@ -1680,6 +1701,7 @@
                         self.autoRefreshMainUrl(cctvObj);
                     }, 8000);
 
+                    // 네이티브 비디오 (iOS 등) 에러 캐처 추가
                     video.addEventListener('error', () => {
                         clearTimeout(nativeWatchdog);
                         if (placeholder) {
