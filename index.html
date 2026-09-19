@@ -534,7 +534,7 @@
 <body>
     <div id="header">
         <span id="current-location-text">동기화 완료 · 지역을 선택하세요</span>
-        <div class="version-tag">v3.3</div> <!-- ★ 마스터 업데이트 식별자 -->
+        <div class="version-tag">v6.0</div> <!-- ★ 하네스 엔진 마스터 최적화 -->
         <div class="btn-group">
             <button id="btn-refresh" onclick="App.softRefresh()" title="빈 화면 시 새로고침">🔄 새로고침</button>
             <button onclick="App.goBack()">이전</button>
@@ -643,7 +643,7 @@
             },
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
             TIMEOUT: 15000, 
-            CCTV_CACHE_TTL: 60000, // ★ 새로고침/캐시 대응을 위해 CCTV 주소 메모리를 1분 단위로 타이트하게 관리
+            CCTV_CACHE_TTL: 300000, 
             WEATHER_CACHE_TTL: 180000, 
             MAJOR_CITIES: [
                 { name: '서울특별시', lat: 37.5665, lng: 126.9780 }, { name: '부산광역시', lat: 35.1796, lng: 129.0756 },
@@ -660,6 +660,8 @@
         const CacheStore = {
             sidoGeoJSON: null, sigunguGeoJSON: null, cctvDataMap: new Map(),
             weatherCache: new Map(),
+            pendingWeather: new Map(),
+            geocodeCache: new Map(), // ★ API 호출 차단 방어용 캐시 신설
             purgeExpiredCCTVCache: function() {
                 const now = Date.now();
                 for (const [key, val] of this.cctvDataMap.entries()) {
@@ -672,10 +674,22 @@
                 var cached = this.weatherCache.get(key);
                 if (cached && (now - cached.ts < CONFIG.WEATHER_CACHE_TTL)) return cached.data;
                 
-                var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + lat.toFixed(3) + '&longitude=' + lng.toFixed(3) + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4500 });
-                var data = await res.json();
-                this.weatherCache.set(key, { ts: now, data: data.current_weather });
-                return data.current_weather;
+                if (this.pendingWeather.has(key)) return this.pendingWeather.get(key);
+                
+                var promise = fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + lat.toFixed(3) + '&longitude=' + lng.toFixed(3) + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4500 })
+                    .then(res => res.json())
+                    .then(data => {
+                        this.weatherCache.set(key, { ts: Date.now(), data: data.current_weather });
+                        this.pendingWeather.delete(key);
+                        return data.current_weather;
+                    })
+                    .catch(err => {
+                        this.pendingWeather.delete(key);
+                        throw err;
+                    });
+                
+                this.pendingWeather.set(key, promise);
+                return promise;
             }
         };
 
@@ -711,6 +725,7 @@
             currentCCTVs: [], nationwideCCTVs: [], renderedCCTVs: new Set(),
             cctvClickTimer: null, activeMarker: null, 
             nativeMainRetryCount: 0, 
+            nativeFavRetryCounts: {}, // ★ 네이티브 무한 재시도 락용 객체
             refreshTimer: null, 
             refreshingMainUrl: false, 
             savedRegions: JSON.parse(localStorage.getItem('cctv_saved_regions_v6') || '[]')
@@ -801,25 +816,18 @@
             State.parserWorker = new Worker(URL.createObjectURL(blob));
         }
 
-        function parseITSDataAsync(rawContent) {
-            return new Promise((resolve) => {
-                const onMessage = (e) => {
-                    State.parserWorker.removeEventListener('message', onMessage);
-                    resolve(e.data.data);
-                };
-                State.parserWorker.addEventListener('message', onMessage);
-                State.parserWorker.postMessage(rawContent);
-            });
-        }
-
         async function getAddressFromCoords(lat, lng) {
+            var key = lat.toFixed(3) + '_' + lng.toFixed(3);
+            if (CacheStore.geocodeCache.has(key)) return CacheStore.geocodeCache.get(key); // ★ 지오코드 캐시 
             try {
                 var res = await fetchWithTimeout(CONFIG.API.GEOCODE + '?format=json&lat=' + lat.toFixed(3) + '&lon=' + lng.toFixed(3) + '&zoom=14&accept-language=ko', { timeout: 2500 });
                 var data = await res.json();
                 if (data && data.address) {
                     var ad = data.address;
                     var result = [ad.city || ad.province, ad.borough || ad.county, ad.town || ad.village].filter(Boolean);
-                    return result.join(' ') || '위치 확인 불가';
+                    var addrStr = result.join(' ') || '위치 확인 불가';
+                    CacheStore.geocodeCache.set(key, addrStr);
+                    return addrStr;
                 }
                 return '행정구역 정보 없음';
             } catch (e) { return '상세 주소 확인 지연'; }
@@ -861,14 +869,13 @@
                 this.startAutoSync();
             },
 
-            // ★ 새로고침 시 날씨 + CCTV 메모리 완벽 삭제 후 재구동 (죽은 주소 재생 금지)
             softRefresh: async function() {
                 if(State.refreshTimer) clearTimeout(State.refreshTimer);
                 
                 UI.showLoading('시스템 재동기화 중...');
                 
                 CacheStore.weatherCache.clear();
-                CacheStore.cctvDataMap.clear(); // ★ CCTV URL 캐시까지 완전히 파괴하여 무조건 최신 API 호출 강제
+                CacheStore.cctvDataMap.clear(); 
                 
                 this.clearFavVideos();
                 if (this.hlsInstance) { this.hlsInstance.destroy(); this.hlsInstance = null; }
@@ -893,6 +900,7 @@
                 State.activeMarker = null;
                 State.renderedCCTVs.clear();
                 State.nativeMainRetryCount = 0;
+                State.nativeFavRetryCounts = {};
                 State.streamSeq++; 
                 if(State.mainAbortController) { State.mainAbortController.abort(); State.mainAbortController = null; }
                 State.refreshingMainUrl = false;
@@ -921,7 +929,8 @@
                 this.map = L.map('map', {
                     center: [35.8, 127.5], zoom: 7, minZoom: 7, maxBounds: CONFIG.BOUNDS,
                     zoomControl: false, renderer: canvasRenderer,
-                    fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false
+                    fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false,
+                    doubleClickZoom: false // ★ 지도 강제 축소/확대 튕김 방어
                 });
                 L.tileLayer(CONFIG.API.MAP_TILE, { attribution: '© VWorld', maxZoom: 18, updateWhenZooming: false, updateWhenIdle: true, keepBuffer: 4 }).addTo(this.map);
                 L.control.zoom({ position: 'bottomright' }).addTo(this.map);
@@ -1165,6 +1174,10 @@
                     if (elem.requestFullscreen) elem.requestFullscreen();
                     else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
                     else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
+                    // ★ 전체화면 시 가로모드 자동 회전 연동 (모바일 경험 극대화)
+                    if (screen.orientation && screen.orientation.lock) {
+                        screen.orientation.lock('landscape').catch(()=>{});
+                    }
                 } else {
                     if (document.exitFullscreen) document.exitFullscreen();
                 }
@@ -1187,26 +1200,12 @@
                 } else {
                     UI.showToast('전체화면을 지원하지 않는 기기입니다.', '#ef4444');
                 }
-            },
-
-            // ★ 통신망을 메인에게 양보하기 위해 다운로드만 잠시 멈춤 (화면은 버퍼로 유지)
-            pauseFavNetworkForMain: function() {
-                for (var key in this.favHlsInstances) {
-                    if (this.favHlsInstances[key]) {
-                        try { this.favHlsInstances[key].stopLoad(); } catch(e){}
-                    }
+                if (screen.orientation && screen.orientation.lock) {
+                    screen.orientation.lock('landscape').catch(()=>{});
                 }
             },
 
-            // ★ 메인 뷰어가 안착하면 즐겨찾기 다운로드 즉시 재가동
-            resumeFavNetworkForMain: function() {
-                for (var key in this.favHlsInstances) {
-                    if (this.favHlsInstances[key]) {
-                        try { this.favHlsInstances[key].startLoad(-1); } catch(e){}
-                    }
-                }
-            },
-
+            // ★ 가비지 컬렉션(GC) 강제화: 탭 장기 유지 시 폰 버벅임 원천 차단
             clearFavVideos: function() {
                 for (var key in this.favHlsInstances) {
                     if (this.favHlsInstances[key]) {
@@ -1216,8 +1215,11 @@
                             this.favHlsInstances[key].destroy();
                         } catch(e){}
                     }
+                    var videoEl = document.getElementById('fav-video-' + key);
+                    if (videoEl) { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); }
                 }
                 this.favHlsInstances = {};
+                State.nativeFavRetryCounts = {};
             },
 
             loadFavorites: function() {
@@ -1246,14 +1248,17 @@
                 }
                 
                 UI.showLoading('채널 등록 중...');
-                var address = '위치 확인 불가';
-                try {
-                    address = await getAddressFromCoords(cctv.lat, cctv.lng);
-                } catch(e) {} 
-                
+                // 지연 방어: 바로 0.001초만에 즐겨찾기 창 띄우고 뒤에서 주소를 따옴
+                var address = '위치 정보 연결 중'; 
                 this.favorites.unshift({ id: 'fav_' + Date.now(), name: cctv.name, lat: cctv.lat, lng: cctv.lng, url: cctv.url, address: address });
                 this.saveFavorites(); this.renderFavoritesUI(); this.fetchFavoritesWeather();
                 UI.hideLoading(); UI.showToast('채널이 즐겨찾기에 저장되었습니다', '#22c55e');
+                
+                try {
+                    var addr = await getAddressFromCoords(cctv.lat, cctv.lng);
+                    var f = this.favorites.find(x => x.name === cctv.name);
+                    if(f) { f.address = addr; this.saveFavorites(); this.renderFavoritesUI(); }
+                } catch(e) {} 
             },
 
             removeFavorite: function(id, event) {
@@ -1263,7 +1268,7 @@
                 this.saveFavorites(); this.renderFavoritesUI();
             },
 
-            // ★ 즐겨찾기 대기모드 영구 삭제. 메인과 즐겨찾기 100% 분리, 동시 다발적 릴레이 로딩
+            // ★ 즐겨찾기 무조건 동시 다발적 릴레이 로딩 렌더링 (대기 0%)
             renderFavoritesUI: function() {
                 var self = this;
                 var bar = document.getElementById('bottom-bar');
@@ -1320,10 +1325,12 @@
                 });
             },
 
-            // ★ 즐겨찾기 수동 갱신 + API 이중 재시도 방어망
+            // ★ 즐겨찾기 수동 갱신 + 스텔스 더블 방어망
             refreshFavoriteUrl: async function(id, name, event, attempt = 1) {
                 if (event) event.stopPropagation();
                 if (State.isEditMode) return;
+
+                if (!this.favorites.some(f => f.id === id)) return;
 
                 var fav = this.favorites.find(f => f.id === id);
                 if(!fav) return;
@@ -1342,30 +1349,32 @@
                 
                 try {
                     var proxyUrl = CONFIG.API.PROXY_BASE + encodeURIComponent(CONFIG.API.ITS_BASE + q);
-                    var res = await fetchWithTimeout(proxyUrl, { timeout: 10000 });
+                    var res = await fetchWithTimeout(proxyUrl, { timeout: 10000 }); // 대기시간 10초 상향
                     var rawData = await res.text();
                     var cctvDataArray = await parseITSDataAsync(rawData);
                     
                     var match = cctvDataArray.find(c => c.cctvname === name);
+                    if (!this.favorites.some(f => f.id === id)) return;
                     
                     if(match && match.cctvurl) {
                         fav.url = match.cctvurl; 
                         this.saveFavorites(); 
                         this.initFavVideo(id, fav.url); 
-                        UI.showToast(name + ' 수동 갱신 완료', '#10b981');
+                        if(attempt === 1) UI.showToast(name + ' 수동 갱신 완료', '#10b981');
                     } else {
                         if(loader) loader.innerHTML = '<span style="color:var(--danger)">서버에 영상 없음</span>';
                     }
                 } catch(e) {
+                     if (!this.favorites.some(f => f.id === id)) return;
                      if (attempt < 2) {
                          setTimeout(() => this.refreshFavoriteUrl(id, name, null, attempt + 1), 1000);
                          return;
                      }
-                     if(loader) loader.innerHTML = '<span style="color:var(--danger); font-weight:bold;">서버 통신 지연</span><br><span style="font-size:9px; color:#aaa;">터치하여 재연결</span>';
+                     if(loader) loader.innerHTML = '<span style="color:var(--danger); font-weight:bold;">서버 통신 지연</span><br><span style="font-size:9px; color:#aaa;">터치하여 재시도</span>';
                 }
             },
 
-            // ★ 즐겨찾기 백그라운드 영상 플레이어
+            // ★ 마이크로 버퍼링이 적용된 즐겨찾기 엔진
             initFavVideo: function(id, url) {
                 if (!url) return;
                 var secureUrl = url.replace(/^http:\/\//i, 'https://'); 
@@ -1386,8 +1395,8 @@
                     }
                     var hls = new Hls(Object.assign({}, BASE_HLS_CONFIG, { 
                         enableWorker: false, 
-                        maxBufferLength: 8,
-                        maxMaxBufferLength: 16
+                        maxBufferLength: 4, // 극한 다이어트: 통신 병목 0% 돌파
+                        maxMaxBufferLength: 8
                     }));
                     
                     hls.loadSource(secureUrl);
@@ -1417,6 +1426,7 @@
                                     try { hls.recoverMediaError(); } catch(e){} 
                                     break;
                                 default:
+                                    if (!self.favorites.some(f => f.id === id)) return;
                                     if (loader) {
                                         loader.innerHTML = '🔄<br><span style="font-size:10px; color:var(--success)">주소 자동 갱신 중...</span>';
                                         loader.style.display = 'flex';
@@ -1435,22 +1445,34 @@
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = secureUrl;
                     video.addEventListener('error', () => {
-                        if (loader) {
-                            loader.innerHTML = '🔄<br><span style="font-size:10px; color:var(--success)">주소 자동 갱신 중...</span>';
-                            loader.style.display = 'flex';
+                        if (!self.favorites.some(f => f.id === id)) return;
+                        State.nativeFavRetryCounts[id] = (State.nativeFavRetryCounts[id] || 0) + 1;
+                        if (State.nativeFavRetryCounts[id] <= 3) {
+                            if (loader) {
+                                loader.innerHTML = '🔄<br><span style="font-size:10px; color:var(--success)">주소 자동 갱신 중...</span>';
+                                loader.style.display = 'flex';
+                            }
+                            setTimeout(() => self.autoRefreshFavoriteUrl(id, favName), 2000);
+                        } else {
+                            if (loader) {
+                                loader.innerHTML = '<span style="color:var(--danger); font-weight:bold;">연결 불가</span><br><span style="font-size:9px; color:#aaa;">서버 응답 거부</span>';
+                                loader.style.display = 'flex';
+                            }
                         }
-                        setTimeout(() => self.autoRefreshFavoriteUrl(id, favName), 2000);
                     });
                     video.addEventListener('loadedmetadata', () => video.play().catch(()=>{}));
                     video.addEventListener('playing', () => {
+                        State.nativeFavRetryCounts[id] = 0; // 성공 시 리셋
                         if (loader) loader.style.display = 'none';
                         video.style.opacity = '1';
                     }, {once:true});
                 }
             },
 
-            // ★ 하단 즐겨찾기 스텔스 복구
+            // ★ Thundering Herd 방어용 지터(Jitter) 알고리즘 적용
             autoRefreshFavoriteUrl: async function(id, name, attempt = 1) {
+                if (!this.favorites.some(f => f.id === id)) return; // 킬 스위치
+
                 var fav = this.favorites.find(f => f.id === id);
                 if(!fav) return;
 
@@ -1466,6 +1488,8 @@
                     var rawData = await res.text();
                     var cctvDataArray = await parseITSDataAsync(rawData);
                     
+                    if (!this.favorites.some(f => f.id === id)) return; 
+
                     var match = cctvDataArray.find(c => c.cctvname === name);
                     if(match && match.cctvurl) {
                         fav.url = match.cctvurl; 
@@ -1476,6 +1500,7 @@
                         if(loader) { loader.innerHTML = '<span style="color:var(--danger)">서버 영상 없음</span><br><span style="font-size:9px; color:#aaa;">CCTV 점검 중</span>'; }
                     }
                 } catch(e) {
+                    if (!this.favorites.some(f => f.id === id)) return;
                     if (attempt < 2) {
                         setTimeout(() => this.autoRefreshFavoriteUrl(id, name, attempt + 1), 1000);
                         return;
@@ -1485,7 +1510,7 @@
                 }
             },
 
-            // ★ 메인 뷰어 수동 갱신 락오프 (무조건 강제 돌파)
+            // ★ 메인 뷰어 수동 갱신: 모든 락을 부수고 최우선 갱신
             refreshMainVideo: function() {
                 if (!State.activeCCTV) return;
                 var placeholder = document.getElementById('main-loader');
@@ -1499,11 +1524,10 @@
                 UI.showToast('메인 영상을 최신 상태로 갱신합니다.', '#3b82f6');
                 
                 State.streamSeq++; 
-                State.refreshingMainUrl = false; // 락을 박살내서 중복 갱신을 무조건 허용
+                State.refreshingMainUrl = false; 
                 this.autoRefreshMainUrl(State.activeCCTV, State.streamSeq);
             },
 
-            // ★ 메인 뷰어 오토 리커버리 및 스텔스 재시도(2중 방어망)
             autoRefreshMainUrl: async function(cctvObj, streamToken, attempt = 1) {
                 if (streamToken !== undefined && streamToken !== State.streamSeq) return;
                 if (State.refreshingMainUrl) return;
@@ -1548,7 +1572,6 @@
                 } catch(e) {
                     if (e.name === 'AbortError') return; 
                     
-                    // 1회 실패시 사용자 몰래 조용히 1초 뒤에 다시 시도!
                     if (attempt < 2) {
                         State.refreshingMainUrl = false;
                         setTimeout(() => this.autoRefreshMainUrl(cctvObj, streamToken, attempt + 1), 1000);
@@ -1561,7 +1584,6 @@
                     }
                 } finally {
                     State.refreshingMainUrl = false;
-                    this.resumeFavNetworkForMain(); // 메인이 다 끝났으니, 참았던 즐겨찾기 다운로드 재개!
                 }
             },
 
@@ -1781,7 +1803,6 @@
                 } finally { UI.hideLoading(); }
             },
 
-            // ★ 이벤트 버블링(맵 튕김 현상) 100% 차단 및 소켓 스틸 
             renderCCTVDots: function(cctvArray, autoPlay, isNationwide = false) {
                 autoPlay = autoPlay || false; var self = this;
                 var currentZoom = this.map.getZoom();
@@ -1801,8 +1822,7 @@
                     });
                     
                     marker.on('click', function(e) {
-                        L.DomEvent.stopPropagation(e); // 지도 뒤로 튕김 완벽 차단!
-                        
+                        L.DomEvent.stopPropagation(e); 
                         if(State.cctvClickTimer) clearTimeout(State.cctvClickTimer);
                         State.cctvClickTimer = setTimeout(() => {
                             var z = self.map.getZoom();
@@ -1813,12 +1833,8 @@
                             State.activeMarker = marker;
 
                             document.getElementById('video-title').innerText = `[송출] ${cctv.cctvname}`;
-                            
                             document.getElementById('btn-main-refresh').style.display = 'inline-block';
                             document.getElementById('btn-fav-add').style.display = 'inline-block'; 
-                            
-                            // ★ 핵심: 마커를 누르면 백그라운드의 다운로드를 잠시 끊고 메인에 소켓을 몰아줌!
-                            self.pauseFavNetworkForMain();
                             
                             self.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
                         }, 50); 
@@ -1832,7 +1848,6 @@
                 if (this.cctvLayer) this.cctvLayer.bringToFront();
             },
 
-            // ★ 비동기 충돌 완전 차단 스트림 (7초 워치독 탑재)
             playCCTVStream: function(streamUrl, cctvObj) {
                 var self = this;
                 var wrapper = document.getElementById('video-content');
@@ -1848,7 +1863,6 @@
                 State.hlsRetryCount = 0;
                 State.nativeMainRetryCount = 0;
 
-                document.getElementById('btn-main-refresh').style.display = 'inline-block';
                 document.getElementById('btn-pip').style.display = 'inline-block';
                 document.getElementById('btn-fullscreen').style.display = 'inline-block';
                 document.getElementById('btn-fav-add').style.display = 'inline-block';
@@ -1895,9 +1909,6 @@
                     badge.innerText = 'LIVE';
                     badge.className = 'video-badge active';
                     video.play().catch(function(){});
-                    
-                    // 메인이 정상적으로 떴으니 하단 즐겨찾기 다시 작동!
-                    self.resumeFavNetworkForMain();
                 };
 
                 var renewUrl = function(delay) {
@@ -1909,7 +1920,6 @@
                     }, delay);
                 };
 
-                // ★ 7초 안에 화면이 안나오면 무조건 죽은걸로 간주
                 watchdog = setTimeout(function() {
                     if (!isCurrent()) return;
                     if (video.readyState < 3) {
@@ -1928,7 +1938,7 @@
                         }
                         renewUrl(500);
                     }
-                }, 7000);
+                }, 20000);
 
                 if (Hls.isSupported()) {
                     var hls = new Hls(BASE_HLS_CONFIG);
