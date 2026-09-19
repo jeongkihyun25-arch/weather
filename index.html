@@ -534,7 +534,7 @@
 <body>
     <div id="header">
         <span id="current-location-text">동기화 완료 · 지역을 선택하세요</span>
-        <div class="version-tag">v4.2</div> <!-- ★ 무결점 렌더링 마스터 -->
+        <div class="version-tag">v3.3</div> <!-- ★ 마스터 업데이트 식별자 -->
         <div class="btn-group">
             <button id="btn-refresh" onclick="App.softRefresh()" title="빈 화면 시 새로고침">🔄 새로고침</button>
             <button onclick="App.goBack()">이전</button>
@@ -643,7 +643,7 @@
             },
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
             TIMEOUT: 15000, 
-            CCTV_CACHE_TTL: 60000, 
+            CCTV_CACHE_TTL: 60000, // ★ 새로고침/캐시 대응을 위해 CCTV 주소 메모리를 1분 단위로 타이트하게 관리
             WEATHER_CACHE_TTL: 180000, 
             MAJOR_CITIES: [
                 { name: '서울특별시', lat: 37.5665, lng: 126.9780 }, { name: '부산광역시', lat: 35.1796, lng: 129.0756 },
@@ -660,8 +660,6 @@
         const CacheStore = {
             sidoGeoJSON: null, sigunguGeoJSON: null, cctvDataMap: new Map(),
             weatherCache: new Map(),
-            pendingWeather: new Map(),
-            geocodeCache: new Map(), 
             purgeExpiredCCTVCache: function() {
                 const now = Date.now();
                 for (const [key, val] of this.cctvDataMap.entries()) {
@@ -674,22 +672,10 @@
                 var cached = this.weatherCache.get(key);
                 if (cached && (now - cached.ts < CONFIG.WEATHER_CACHE_TTL)) return cached.data;
                 
-                if (this.pendingWeather.has(key)) return this.pendingWeather.get(key);
-                
-                var promise = fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + lat.toFixed(3) + '&longitude=' + lng.toFixed(3) + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4500 })
-                    .then(res => res.json())
-                    .then(data => {
-                        this.weatherCache.set(key, { ts: Date.now(), data: data.current_weather });
-                        this.pendingWeather.delete(key);
-                        return data.current_weather;
-                    })
-                    .catch(err => {
-                        this.pendingWeather.delete(key);
-                        throw err;
-                    });
-                
-                this.pendingWeather.set(key, promise);
-                return promise;
+                var res = await fetchWithTimeout(CONFIG.API.WEATHER + '?latitude=' + lat.toFixed(3) + '&longitude=' + lng.toFixed(3) + '&current_weather=true&timezone=Asia%2FSeoul', { timeout: 4500 });
+                var data = await res.json();
+                this.weatherCache.set(key, { ts: now, data: data.current_weather });
+                return data.current_weather;
             }
         };
 
@@ -721,11 +707,10 @@
             mainAbortController: null,
             isEditMode: false, syncInterval: null,
             currentFocusBounds: null, activeRegionName: null, fromSearch: false, parentSidoCode: null,
-            parentSidoName: null, hlsRetryCount: 0,
+            parentSidoName: null, parserWorker: null, hlsRetryCount: 0,
             currentCCTVs: [], nationwideCCTVs: [], renderedCCTVs: new Set(),
             cctvClickTimer: null, activeMarker: null, 
             nativeMainRetryCount: 0, 
-            nativeFavRetryCounts: {}, 
             refreshTimer: null, 
             refreshingMainUrl: false, 
             savedRegions: JSON.parse(localStorage.getItem('cctv_saved_regions_v6') || '[]')
@@ -774,53 +759,67 @@
             } catch (error) { clearTimeout(id); throw error; }
         }
 
-        // ★ 워커 스레드 꼬임 해결: 로컬 파싱 함수로 전환하여 Race Condition 영구 제거
-        async function parseITSDataAsync(rawContent) {
-            let results = [];
-            try {
-                const json = JSON.parse(rawContent);
-                if (json && json.response && json.response.data) {
-                    const dataArray = Array.isArray(json.response.data) ? json.response.data : [json.response.data];
-                    return dataArray.map(item => ({
-                        cctvname: (item.cctvname || item.cctvName || '교통 CCTV').replace(/[;\s]+$/, '').trim(),
-                        coordy: parseFloat(item.coordy || item.coordY || 0),
-                        coordx: parseFloat(item.coordx || item.coordX || 0),
-                        cctvurl: item.cctvurl || item.cctvUrl || ''
-                    })).filter(item => item.cctvurl);
-                }
-            } catch(err) {}
+        function initDataWorker() {
+            const workerCode = `
+                self.onmessage = function(e) {
+                    const rawContent = e.data; let results = [];
+                    try {
+                        const json = JSON.parse(rawContent);
+                        if (json && json.response && json.response.data) {
+                            const dataArray = Array.isArray(json.response.data) ? json.response.data : [json.response.data];
+                            results = dataArray.map(item => ({
+                                cctvname: (item.cctvname || item.cctvName || '교통 CCTV').replace(/[;\\s]+$/, '').trim(),
+                                coordy: parseFloat(item.coordy || item.coordY || 0),
+                                coordx: parseFloat(item.coordx || item.coordX || 0),
+                                cctvurl: item.cctvurl || item.cctvUrl || ''
+                            })).filter(item => item.cctvurl);
+                            self.postMessage({ success: true, data: results });
+                            return;
+                        }
+                    } catch(err) {}
 
-            const dataBlocks = rawContent.match(/<data>[\s\S]*?<\/data>/gi) || [];
-            dataBlocks.forEach(block => {
-                const nameMatch = block.match(/<cctvname>([\s\S]*?)<\/cctvname>/i) || block.match(/<cctvName>([\s\S]*?)<\/cctvName>/i);
-                const yMatch = block.match(/<coordy>([\s\S]*?)<\/coordy>/i) || block.match(/<coordY>([\s\S]*?)<\/coordY>/i);
-                const xMatch = block.match(/<coordx>([\s\S]*?)<\/coordx>/i) || block.match(/<coordX>([\s\S]*?)<\/coordX>/i);
-                const urlMatch = block.match(/<cctvurl>([\s\S]*?)<\/cctvurl>/i) || block.match(/<cctvUrl>([\s\S]*?)<\/cctvUrl>/i);
-                
-                if(nameMatch && yMatch && xMatch && urlMatch) {
-                    results.push({
-                        cctvname: nameMatch[1].replace(/[;\s]+$/, '').trim() || '교통 CCTV',
-                        coordy: parseFloat(yMatch[1] || 0),
-                        coordx: parseFloat(xMatch[1] || 0),
-                        cctvurl: urlMatch[1] || ''
+                    const dataBlocks = rawContent.match(/<data>[\\s\\S]*?<\\/data>/gi) || [];
+                    dataBlocks.forEach(block => {
+                        const nameMatch = block.match(/<cctvname>([\\s\\S]*?)<\\/cctvname>/i) || block.match(/<cctvName>([\\s\\S]*?)<\\/cctvName>/i);
+                        const yMatch = block.match(/<coordy>([\\s\\S]*?)<\\/coordy>/i) || block.match(/<coordY>([\\s\\S]*?)<\\/coordY>/i);
+                        const xMatch = block.match(/<coordx>([\\s\\S]*?)<\\/coordx>/i) || block.match(/<coordX>([\\s\\S]*?)<\\/coordX>/i);
+                        const urlMatch = block.match(/<cctvurl>([\\s\\S]*?)<\\/cctvurl>/i) || block.match(/<cctvUrl>([\\s\\S]*?)<\\/cctvUrl>/i);
+                        
+                        if(nameMatch && yMatch && xMatch && urlMatch) {
+                            results.push({
+                                cctvname: nameMatch[1].replace(/[;\\s]+$/, '').trim() || '교통 CCTV',
+                                coordy: parseFloat(yMatch[1] || 0),
+                                coordx: parseFloat(xMatch[1] || 0),
+                                cctvurl: urlMatch[1] || ''
+                            });
+                        }
                     });
-                }
+                    self.postMessage({ success: true, data: results });
+                };
+            `;
+            const blob = new Blob([workerCode], { type: 'application/javascript' });
+            State.parserWorker = new Worker(URL.createObjectURL(blob));
+        }
+
+        function parseITSDataAsync(rawContent) {
+            return new Promise((resolve) => {
+                const onMessage = (e) => {
+                    State.parserWorker.removeEventListener('message', onMessage);
+                    resolve(e.data.data);
+                };
+                State.parserWorker.addEventListener('message', onMessage);
+                State.parserWorker.postMessage(rawContent);
             });
-            return results;
         }
 
         async function getAddressFromCoords(lat, lng) {
-            var key = lat.toFixed(3) + '_' + lng.toFixed(3);
-            if (CacheStore.geocodeCache.has(key)) return CacheStore.geocodeCache.get(key); 
             try {
                 var res = await fetchWithTimeout(CONFIG.API.GEOCODE + '?format=json&lat=' + lat.toFixed(3) + '&lon=' + lng.toFixed(3) + '&zoom=14&accept-language=ko', { timeout: 2500 });
                 var data = await res.json();
                 if (data && data.address) {
                     var ad = data.address;
                     var result = [ad.city || ad.province, ad.borough || ad.county, ad.town || ad.village].filter(Boolean);
-                    var addrStr = result.join(' ') || '위치 확인 불가';
-                    CacheStore.geocodeCache.set(key, addrStr);
-                    return addrStr;
+                    return result.join(' ') || '위치 확인 불가';
                 }
                 return '행정구역 정보 없음';
             } catch (e) { return '상세 주소 확인 지연'; }
@@ -848,6 +847,7 @@
             favHlsInstances: {},
 
             init: async function() {
+                initDataWorker();
                 this.initMap();
                 this.initGeocoder();
                 this.initResizeListener();
@@ -861,13 +861,14 @@
                 this.startAutoSync();
             },
 
+            // ★ 새로고침 시 날씨 + CCTV 메모리 완벽 삭제 후 재구동 (죽은 주소 재생 금지)
             softRefresh: async function() {
                 if(State.refreshTimer) clearTimeout(State.refreshTimer);
                 
                 UI.showLoading('시스템 재동기화 중...');
                 
                 CacheStore.weatherCache.clear();
-                CacheStore.cctvDataMap.clear(); 
+                CacheStore.cctvDataMap.clear(); // ★ CCTV URL 캐시까지 완전히 파괴하여 무조건 최신 API 호출 강제
                 
                 this.clearFavVideos();
                 if (this.hlsInstance) { this.hlsInstance.destroy(); this.hlsInstance = null; }
@@ -892,7 +893,6 @@
                 State.activeMarker = null;
                 State.renderedCCTVs.clear();
                 State.nativeMainRetryCount = 0;
-                State.nativeFavRetryCounts = {};
                 State.streamSeq++; 
                 if(State.mainAbortController) { State.mainAbortController.abort(); State.mainAbortController = null; }
                 State.refreshingMainUrl = false;
@@ -921,8 +921,7 @@
                 this.map = L.map('map', {
                     center: [35.8, 127.5], zoom: 7, minZoom: 7, maxBounds: CONFIG.BOUNDS,
                     zoomControl: false, renderer: canvasRenderer,
-                    fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false,
-                    doubleClickZoom: false 
+                    fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false
                 });
                 L.tileLayer(CONFIG.API.MAP_TILE, { attribution: '© VWorld', maxZoom: 18, updateWhenZooming: false, updateWhenIdle: true, keepBuffer: 4 }).addTo(this.map);
                 L.control.zoom({ position: 'bottomright' }).addTo(this.map);
@@ -1190,6 +1189,7 @@
                 }
             },
 
+            // ★ 통신망을 메인에게 양보하기 위해 다운로드만 잠시 멈춤 (화면은 버퍼로 유지)
             pauseFavNetworkForMain: function() {
                 for (var key in this.favHlsInstances) {
                     if (this.favHlsInstances[key]) {
@@ -1198,6 +1198,7 @@
                 }
             },
 
+            // ★ 메인 뷰어가 안착하면 즐겨찾기 다운로드 즉시 재가동
             resumeFavNetworkForMain: function() {
                 for (var key in this.favHlsInstances) {
                     if (this.favHlsInstances[key]) {
@@ -1215,8 +1216,6 @@
                             this.favHlsInstances[key].destroy();
                         } catch(e){}
                     }
-                    var videoEl = document.getElementById('fav-video-' + key);
-                    if (videoEl) { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); }
                 }
                 this.favHlsInstances = {};
             },
@@ -1264,6 +1263,7 @@
                 this.saveFavorites(); this.renderFavoritesUI();
             },
 
+            // ★ 즐겨찾기 대기모드 영구 삭제. 메인과 즐겨찾기 100% 분리, 동시 다발적 릴레이 로딩
             renderFavoritesUI: function() {
                 var self = this;
                 var bar = document.getElementById('bottom-bar');
@@ -1320,11 +1320,10 @@
                 });
             },
 
+            // ★ 즐겨찾기 수동 갱신 + API 이중 재시도 방어망
             refreshFavoriteUrl: async function(id, name, event, attempt = 1) {
                 if (event) event.stopPropagation();
                 if (State.isEditMode) return;
-
-                if (!this.favorites.some(f => f.id === id)) return;
 
                 var fav = this.favorites.find(f => f.id === id);
                 if(!fav) return;
@@ -1349,26 +1348,24 @@
                     
                     var match = cctvDataArray.find(c => c.cctvname === name);
                     
-                    if (!this.favorites.some(f => f.id === id)) return;
-                    
                     if(match && match.cctvurl) {
                         fav.url = match.cctvurl; 
                         this.saveFavorites(); 
                         this.initFavVideo(id, fav.url); 
-                        if(attempt === 1) UI.showToast(name + ' 수동 갱신 완료', '#10b981');
+                        UI.showToast(name + ' 수동 갱신 완료', '#10b981');
                     } else {
                         if(loader) loader.innerHTML = '<span style="color:var(--danger)">서버에 영상 없음</span>';
                     }
                 } catch(e) {
-                     if (!this.favorites.some(f => f.id === id)) return;
                      if (attempt < 2) {
                          setTimeout(() => this.refreshFavoriteUrl(id, name, null, attempt + 1), 1000);
                          return;
                      }
-                     if(loader) loader.innerHTML = '<span style="color:var(--danger); font-weight:bold;">서버 통신 지연</span><br><span style="font-size:9px; color:#aaa;">터치하여 재시도</span>';
+                     if(loader) loader.innerHTML = '<span style="color:var(--danger); font-weight:bold;">서버 통신 지연</span><br><span style="font-size:9px; color:#aaa;">터치하여 재연결</span>';
                 }
             },
 
+            // ★ 즐겨찾기 백그라운드 영상 플레이어
             initFavVideo: function(id, url) {
                 if (!url) return;
                 var secureUrl = url.replace(/^http:\/\//i, 'https://'); 
@@ -1420,7 +1417,6 @@
                                     try { hls.recoverMediaError(); } catch(e){} 
                                     break;
                                 default:
-                                    if (!self.favorites.some(f => f.id === id)) return;
                                     if (loader) {
                                         loader.innerHTML = '🔄<br><span style="font-size:10px; color:var(--success)">주소 자동 갱신 중...</span>';
                                         loader.style.display = 'flex';
@@ -1439,7 +1435,6 @@
                 } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                     video.src = secureUrl;
                     video.addEventListener('error', () => {
-                        if (!self.favorites.some(f => f.id === id)) return;
                         if (loader) {
                             loader.innerHTML = '🔄<br><span style="font-size:10px; color:var(--success)">주소 자동 갱신 중...</span>';
                             loader.style.display = 'flex';
@@ -1454,9 +1449,8 @@
                 }
             },
 
+            // ★ 하단 즐겨찾기 스텔스 복구
             autoRefreshFavoriteUrl: async function(id, name, attempt = 1) {
-                if (!this.favorites.some(f => f.id === id)) return; 
-
                 var fav = this.favorites.find(f => f.id === id);
                 if(!fav) return;
 
@@ -1472,8 +1466,6 @@
                     var rawData = await res.text();
                     var cctvDataArray = await parseITSDataAsync(rawData);
                     
-                    if (!this.favorites.some(f => f.id === id)) return; 
-
                     var match = cctvDataArray.find(c => c.cctvname === name);
                     if(match && match.cctvurl) {
                         fav.url = match.cctvurl; 
@@ -1484,7 +1476,6 @@
                         if(loader) { loader.innerHTML = '<span style="color:var(--danger)">서버 영상 없음</span><br><span style="font-size:9px; color:#aaa;">CCTV 점검 중</span>'; }
                     }
                 } catch(e) {
-                    if (!this.favorites.some(f => f.id === id)) return; 
                     if (attempt < 2) {
                         setTimeout(() => this.autoRefreshFavoriteUrl(id, name, attempt + 1), 1000);
                         return;
@@ -1494,6 +1485,7 @@
                 }
             },
 
+            // ★ 메인 뷰어 수동 갱신 락오프 (무조건 강제 돌파)
             refreshMainVideo: function() {
                 if (!State.activeCCTV) return;
                 var placeholder = document.getElementById('main-loader');
@@ -1507,10 +1499,11 @@
                 UI.showToast('메인 영상을 최신 상태로 갱신합니다.', '#3b82f6');
                 
                 State.streamSeq++; 
-                State.refreshingMainUrl = false; 
+                State.refreshingMainUrl = false; // 락을 박살내서 중복 갱신을 무조건 허용
                 this.autoRefreshMainUrl(State.activeCCTV, State.streamSeq);
             },
 
+            // ★ 메인 뷰어 오토 리커버리 및 스텔스 재시도(2중 방어망)
             autoRefreshMainUrl: async function(cctvObj, streamToken, attempt = 1) {
                 if (streamToken !== undefined && streamToken !== State.streamSeq) return;
                 if (State.refreshingMainUrl) return;
@@ -1555,6 +1548,7 @@
                 } catch(e) {
                     if (e.name === 'AbortError') return; 
                     
+                    // 1회 실패시 사용자 몰래 조용히 1초 뒤에 다시 시도!
                     if (attempt < 2) {
                         State.refreshingMainUrl = false;
                         setTimeout(() => this.autoRefreshMainUrl(cctvObj, streamToken, attempt + 1), 1000);
@@ -1567,7 +1561,7 @@
                     }
                 } finally {
                     State.refreshingMainUrl = false;
-                    this.resumeFavNetworkForMain(); 
+                    this.resumeFavNetworkForMain(); // 메인이 다 끝났으니, 참았던 즐겨찾기 다운로드 재개!
                 }
             },
 
@@ -1787,6 +1781,7 @@
                 } finally { UI.hideLoading(); }
             },
 
+            // ★ 이벤트 버블링(맵 튕김 현상) 100% 차단 및 소켓 스틸 
             renderCCTVDots: function(cctvArray, autoPlay, isNationwide = false) {
                 autoPlay = autoPlay || false; var self = this;
                 var currentZoom = this.map.getZoom();
@@ -1806,7 +1801,8 @@
                     });
                     
                     marker.on('click', function(e) {
-                        L.DomEvent.stopPropagation(e); 
+                        L.DomEvent.stopPropagation(e); // 지도 뒤로 튕김 완벽 차단!
+                        
                         if(State.cctvClickTimer) clearTimeout(State.cctvClickTimer);
                         State.cctvClickTimer = setTimeout(() => {
                             var z = self.map.getZoom();
@@ -1817,12 +1813,13 @@
                             State.activeMarker = marker;
 
                             document.getElementById('video-title').innerText = `[송출] ${cctv.cctvname}`;
+                            
                             document.getElementById('btn-main-refresh').style.display = 'inline-block';
                             document.getElementById('btn-fav-add').style.display = 'inline-block'; 
                             
+                            // ★ 핵심: 마커를 누르면 백그라운드의 다운로드를 잠시 끊고 메인에 소켓을 몰아줌!
                             self.pauseFavNetworkForMain();
                             
-                            // ★ 0초 딜레이로 다이렉트 샷 
                             self.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
                         }, 50); 
                     });
@@ -1835,6 +1832,7 @@
                 if (this.cctvLayer) this.cctvLayer.bringToFront();
             },
 
+            // ★ 비동기 충돌 완전 차단 스트림 (7초 워치독 탑재)
             playCCTVStream: function(streamUrl, cctvObj) {
                 var self = this;
                 var wrapper = document.getElementById('video-content');
@@ -1850,6 +1848,7 @@
                 State.hlsRetryCount = 0;
                 State.nativeMainRetryCount = 0;
 
+                document.getElementById('btn-main-refresh').style.display = 'inline-block';
                 document.getElementById('btn-pip').style.display = 'inline-block';
                 document.getElementById('btn-fullscreen').style.display = 'inline-block';
                 document.getElementById('btn-fav-add').style.display = 'inline-block';
@@ -1897,6 +1896,7 @@
                     badge.className = 'video-badge active';
                     video.play().catch(function(){});
                     
+                    // 메인이 정상적으로 떴으니 하단 즐겨찾기 다시 작동!
                     self.resumeFavNetworkForMain();
                 };
 
@@ -1909,7 +1909,7 @@
                     }, delay);
                 };
 
-                // ★ 기존 20초 -> 7초로 확 줄여서 안 켜지면 무조건 바로바로 새 주소 발급 
+                // ★ 7초 안에 화면이 안나오면 무조건 죽은걸로 간주
                 watchdog = setTimeout(function() {
                     if (!isCurrent()) return;
                     if (video.readyState < 3) {
