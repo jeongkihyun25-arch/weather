@@ -534,7 +534,7 @@
 <body>
     <div id="header">
         <span id="current-location-text">동기화 완료 · 지역을 선택하세요</span>
-        <div class="version-tag">v6.0</div> <!-- ★ 하네스 엔진 마스터 최적화 -->
+        <div class="version-tag">v4.2</div> <!-- ★ 무결점 렌더링 마스터 -->
         <div class="btn-group">
             <button id="btn-refresh" onclick="App.softRefresh()" title="빈 화면 시 새로고침">🔄 새로고침</button>
             <button onclick="App.goBack()">이전</button>
@@ -643,7 +643,7 @@
             },
             BOUNDS: L.latLngBounds(L.latLng(33.10, 125.06), L.latLng(38.45, 131.52)),
             TIMEOUT: 15000, 
-            CCTV_CACHE_TTL: 300000, 
+            CCTV_CACHE_TTL: 60000, 
             WEATHER_CACHE_TTL: 180000, 
             MAJOR_CITIES: [
                 { name: '서울특별시', lat: 37.5665, lng: 126.9780 }, { name: '부산광역시', lat: 35.1796, lng: 129.0756 },
@@ -661,7 +661,7 @@
             sidoGeoJSON: null, sigunguGeoJSON: null, cctvDataMap: new Map(),
             weatherCache: new Map(),
             pendingWeather: new Map(),
-            geocodeCache: new Map(), // ★ API 호출 차단 방어용 캐시 신설
+            geocodeCache: new Map(), 
             purgeExpiredCCTVCache: function() {
                 const now = Date.now();
                 for (const [key, val] of this.cctvDataMap.entries()) {
@@ -721,11 +721,11 @@
             mainAbortController: null,
             isEditMode: false, syncInterval: null,
             currentFocusBounds: null, activeRegionName: null, fromSearch: false, parentSidoCode: null,
-            parentSidoName: null, parserWorker: null, hlsRetryCount: 0,
+            parentSidoName: null, hlsRetryCount: 0,
             currentCCTVs: [], nationwideCCTVs: [], renderedCCTVs: new Set(),
             cctvClickTimer: null, activeMarker: null, 
             nativeMainRetryCount: 0, 
-            nativeFavRetryCounts: {}, // ★ 네이티브 무한 재시도 락용 객체
+            nativeFavRetryCounts: {}, 
             refreshTimer: null, 
             refreshingMainUrl: false, 
             savedRegions: JSON.parse(localStorage.getItem('cctv_saved_regions_v6') || '[]')
@@ -774,51 +774,44 @@
             } catch (error) { clearTimeout(id); throw error; }
         }
 
-        function initDataWorker() {
-            const workerCode = `
-                self.onmessage = function(e) {
-                    const rawContent = e.data; let results = [];
-                    try {
-                        const json = JSON.parse(rawContent);
-                        if (json && json.response && json.response.data) {
-                            const dataArray = Array.isArray(json.response.data) ? json.response.data : [json.response.data];
-                            results = dataArray.map(item => ({
-                                cctvname: (item.cctvname || item.cctvName || '교통 CCTV').replace(/[;\\s]+$/, '').trim(),
-                                coordy: parseFloat(item.coordy || item.coordY || 0),
-                                coordx: parseFloat(item.coordx || item.coordX || 0),
-                                cctvurl: item.cctvurl || item.cctvUrl || ''
-                            })).filter(item => item.cctvurl);
-                            self.postMessage({ success: true, data: results });
-                            return;
-                        }
-                    } catch(err) {}
+        // ★ 워커 스레드 꼬임 해결: 로컬 파싱 함수로 전환하여 Race Condition 영구 제거
+        async function parseITSDataAsync(rawContent) {
+            let results = [];
+            try {
+                const json = JSON.parse(rawContent);
+                if (json && json.response && json.response.data) {
+                    const dataArray = Array.isArray(json.response.data) ? json.response.data : [json.response.data];
+                    return dataArray.map(item => ({
+                        cctvname: (item.cctvname || item.cctvName || '교통 CCTV').replace(/[;\s]+$/, '').trim(),
+                        coordy: parseFloat(item.coordy || item.coordY || 0),
+                        coordx: parseFloat(item.coordx || item.coordX || 0),
+                        cctvurl: item.cctvurl || item.cctvUrl || ''
+                    })).filter(item => item.cctvurl);
+                }
+            } catch(err) {}
 
-                    const dataBlocks = rawContent.match(/<data>[\\s\\S]*?<\\/data>/gi) || [];
-                    dataBlocks.forEach(block => {
-                        const nameMatch = block.match(/<cctvname>([\\s\\S]*?)<\\/cctvname>/i) || block.match(/<cctvName>([\\s\\S]*?)<\\/cctvName>/i);
-                        const yMatch = block.match(/<coordy>([\\s\\S]*?)<\\/coordy>/i) || block.match(/<coordY>([\\s\\S]*?)<\\/coordY>/i);
-                        const xMatch = block.match(/<coordx>([\\s\\S]*?)<\\/coordx>/i) || block.match(/<coordX>([\\s\\S]*?)<\\/coordX>/i);
-                        const urlMatch = block.match(/<cctvurl>([\\s\\S]*?)<\\/cctvurl>/i) || block.match(/<cctvUrl>([\\s\\S]*?)<\\/cctvUrl>/i);
-                        
-                        if(nameMatch && yMatch && xMatch && urlMatch) {
-                            results.push({
-                                cctvname: nameMatch[1].replace(/[;\\s]+$/, '').trim() || '교통 CCTV',
-                                coordy: parseFloat(yMatch[1] || 0),
-                                coordx: parseFloat(xMatch[1] || 0),
-                                cctvurl: urlMatch[1] || ''
-                            });
-                        }
+            const dataBlocks = rawContent.match(/<data>[\s\S]*?<\/data>/gi) || [];
+            dataBlocks.forEach(block => {
+                const nameMatch = block.match(/<cctvname>([\s\S]*?)<\/cctvname>/i) || block.match(/<cctvName>([\s\S]*?)<\/cctvName>/i);
+                const yMatch = block.match(/<coordy>([\s\S]*?)<\/coordy>/i) || block.match(/<coordY>([\s\S]*?)<\/coordY>/i);
+                const xMatch = block.match(/<coordx>([\s\S]*?)<\/coordx>/i) || block.match(/<coordX>([\s\S]*?)<\/coordX>/i);
+                const urlMatch = block.match(/<cctvurl>([\s\S]*?)<\/cctvurl>/i) || block.match(/<cctvUrl>([\s\S]*?)<\/cctvUrl>/i);
+                
+                if(nameMatch && yMatch && xMatch && urlMatch) {
+                    results.push({
+                        cctvname: nameMatch[1].replace(/[;\s]+$/, '').trim() || '교통 CCTV',
+                        coordy: parseFloat(yMatch[1] || 0),
+                        coordx: parseFloat(xMatch[1] || 0),
+                        cctvurl: urlMatch[1] || ''
                     });
-                    self.postMessage({ success: true, data: results });
-                };
-            `;
-            const blob = new Blob([workerCode], { type: 'application/javascript' });
-            State.parserWorker = new Worker(URL.createObjectURL(blob));
+                }
+            });
+            return results;
         }
 
         async function getAddressFromCoords(lat, lng) {
             var key = lat.toFixed(3) + '_' + lng.toFixed(3);
-            if (CacheStore.geocodeCache.has(key)) return CacheStore.geocodeCache.get(key); // ★ 지오코드 캐시 
+            if (CacheStore.geocodeCache.has(key)) return CacheStore.geocodeCache.get(key); 
             try {
                 var res = await fetchWithTimeout(CONFIG.API.GEOCODE + '?format=json&lat=' + lat.toFixed(3) + '&lon=' + lng.toFixed(3) + '&zoom=14&accept-language=ko', { timeout: 2500 });
                 var data = await res.json();
@@ -855,7 +848,6 @@
             favHlsInstances: {},
 
             init: async function() {
-                initDataWorker();
                 this.initMap();
                 this.initGeocoder();
                 this.initResizeListener();
@@ -930,7 +922,7 @@
                     center: [35.8, 127.5], zoom: 7, minZoom: 7, maxBounds: CONFIG.BOUNDS,
                     zoomControl: false, renderer: canvasRenderer,
                     fadeAnimation: false, zoomAnimation: false, markerZoomAnimation: false,
-                    doubleClickZoom: false // ★ 지도 강제 축소/확대 튕김 방어
+                    doubleClickZoom: false 
                 });
                 L.tileLayer(CONFIG.API.MAP_TILE, { attribution: '© VWorld', maxZoom: 18, updateWhenZooming: false, updateWhenIdle: true, keepBuffer: 4 }).addTo(this.map);
                 L.control.zoom({ position: 'bottomright' }).addTo(this.map);
@@ -1174,10 +1166,6 @@
                     if (elem.requestFullscreen) elem.requestFullscreen();
                     else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
                     else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
-                    // ★ 전체화면 시 가로모드 자동 회전 연동 (모바일 경험 극대화)
-                    if (screen.orientation && screen.orientation.lock) {
-                        screen.orientation.lock('landscape').catch(()=>{});
-                    }
                 } else {
                     if (document.exitFullscreen) document.exitFullscreen();
                 }
@@ -1200,12 +1188,24 @@
                 } else {
                     UI.showToast('전체화면을 지원하지 않는 기기입니다.', '#ef4444');
                 }
-                if (screen.orientation && screen.orientation.lock) {
-                    screen.orientation.lock('landscape').catch(()=>{});
+            },
+
+            pauseFavNetworkForMain: function() {
+                for (var key in this.favHlsInstances) {
+                    if (this.favHlsInstances[key]) {
+                        try { this.favHlsInstances[key].stopLoad(); } catch(e){}
+                    }
                 }
             },
 
-            // ★ 가비지 컬렉션(GC) 강제화: 탭 장기 유지 시 폰 버벅임 원천 차단
+            resumeFavNetworkForMain: function() {
+                for (var key in this.favHlsInstances) {
+                    if (this.favHlsInstances[key]) {
+                        try { this.favHlsInstances[key].startLoad(-1); } catch(e){}
+                    }
+                }
+            },
+
             clearFavVideos: function() {
                 for (var key in this.favHlsInstances) {
                     if (this.favHlsInstances[key]) {
@@ -1219,7 +1219,6 @@
                     if (videoEl) { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); }
                 }
                 this.favHlsInstances = {};
-                State.nativeFavRetryCounts = {};
             },
 
             loadFavorites: function() {
@@ -1248,17 +1247,14 @@
                 }
                 
                 UI.showLoading('채널 등록 중...');
-                // 지연 방어: 바로 0.001초만에 즐겨찾기 창 띄우고 뒤에서 주소를 따옴
-                var address = '위치 정보 연결 중'; 
+                var address = '위치 확인 불가';
+                try {
+                    address = await getAddressFromCoords(cctv.lat, cctv.lng);
+                } catch(e) {} 
+                
                 this.favorites.unshift({ id: 'fav_' + Date.now(), name: cctv.name, lat: cctv.lat, lng: cctv.lng, url: cctv.url, address: address });
                 this.saveFavorites(); this.renderFavoritesUI(); this.fetchFavoritesWeather();
                 UI.hideLoading(); UI.showToast('채널이 즐겨찾기에 저장되었습니다', '#22c55e');
-                
-                try {
-                    var addr = await getAddressFromCoords(cctv.lat, cctv.lng);
-                    var f = this.favorites.find(x => x.name === cctv.name);
-                    if(f) { f.address = addr; this.saveFavorites(); this.renderFavoritesUI(); }
-                } catch(e) {} 
             },
 
             removeFavorite: function(id, event) {
@@ -1268,7 +1264,6 @@
                 this.saveFavorites(); this.renderFavoritesUI();
             },
 
-            // ★ 즐겨찾기 무조건 동시 다발적 릴레이 로딩 렌더링 (대기 0%)
             renderFavoritesUI: function() {
                 var self = this;
                 var bar = document.getElementById('bottom-bar');
@@ -1325,7 +1320,6 @@
                 });
             },
 
-            // ★ 즐겨찾기 수동 갱신 + 스텔스 더블 방어망
             refreshFavoriteUrl: async function(id, name, event, attempt = 1) {
                 if (event) event.stopPropagation();
                 if (State.isEditMode) return;
@@ -1349,11 +1343,12 @@
                 
                 try {
                     var proxyUrl = CONFIG.API.PROXY_BASE + encodeURIComponent(CONFIG.API.ITS_BASE + q);
-                    var res = await fetchWithTimeout(proxyUrl, { timeout: 10000 }); // 대기시간 10초 상향
+                    var res = await fetchWithTimeout(proxyUrl, { timeout: 10000 });
                     var rawData = await res.text();
                     var cctvDataArray = await parseITSDataAsync(rawData);
                     
                     var match = cctvDataArray.find(c => c.cctvname === name);
+                    
                     if (!this.favorites.some(f => f.id === id)) return;
                     
                     if(match && match.cctvurl) {
@@ -1374,7 +1369,6 @@
                 }
             },
 
-            // ★ 마이크로 버퍼링이 적용된 즐겨찾기 엔진
             initFavVideo: function(id, url) {
                 if (!url) return;
                 var secureUrl = url.replace(/^http:\/\//i, 'https://'); 
@@ -1395,8 +1389,8 @@
                     }
                     var hls = new Hls(Object.assign({}, BASE_HLS_CONFIG, { 
                         enableWorker: false, 
-                        maxBufferLength: 4, // 극한 다이어트: 통신 병목 0% 돌파
-                        maxMaxBufferLength: 8
+                        maxBufferLength: 8,
+                        maxMaxBufferLength: 16
                     }));
                     
                     hls.loadSource(secureUrl);
@@ -1446,32 +1440,22 @@
                     video.src = secureUrl;
                     video.addEventListener('error', () => {
                         if (!self.favorites.some(f => f.id === id)) return;
-                        State.nativeFavRetryCounts[id] = (State.nativeFavRetryCounts[id] || 0) + 1;
-                        if (State.nativeFavRetryCounts[id] <= 3) {
-                            if (loader) {
-                                loader.innerHTML = '🔄<br><span style="font-size:10px; color:var(--success)">주소 자동 갱신 중...</span>';
-                                loader.style.display = 'flex';
-                            }
-                            setTimeout(() => self.autoRefreshFavoriteUrl(id, favName), 2000);
-                        } else {
-                            if (loader) {
-                                loader.innerHTML = '<span style="color:var(--danger); font-weight:bold;">연결 불가</span><br><span style="font-size:9px; color:#aaa;">서버 응답 거부</span>';
-                                loader.style.display = 'flex';
-                            }
+                        if (loader) {
+                            loader.innerHTML = '🔄<br><span style="font-size:10px; color:var(--success)">주소 자동 갱신 중...</span>';
+                            loader.style.display = 'flex';
                         }
+                        setTimeout(() => self.autoRefreshFavoriteUrl(id, favName), 2000);
                     });
                     video.addEventListener('loadedmetadata', () => video.play().catch(()=>{}));
                     video.addEventListener('playing', () => {
-                        State.nativeFavRetryCounts[id] = 0; // 성공 시 리셋
                         if (loader) loader.style.display = 'none';
                         video.style.opacity = '1';
                     }, {once:true});
                 }
             },
 
-            // ★ Thundering Herd 방어용 지터(Jitter) 알고리즘 적용
             autoRefreshFavoriteUrl: async function(id, name, attempt = 1) {
-                if (!this.favorites.some(f => f.id === id)) return; // 킬 스위치
+                if (!this.favorites.some(f => f.id === id)) return; 
 
                 var fav = this.favorites.find(f => f.id === id);
                 if(!fav) return;
@@ -1500,7 +1484,7 @@
                         if(loader) { loader.innerHTML = '<span style="color:var(--danger)">서버 영상 없음</span><br><span style="font-size:9px; color:#aaa;">CCTV 점검 중</span>'; }
                     }
                 } catch(e) {
-                    if (!this.favorites.some(f => f.id === id)) return;
+                    if (!this.favorites.some(f => f.id === id)) return; 
                     if (attempt < 2) {
                         setTimeout(() => this.autoRefreshFavoriteUrl(id, name, attempt + 1), 1000);
                         return;
@@ -1510,7 +1494,6 @@
                 }
             },
 
-            // ★ 메인 뷰어 수동 갱신: 모든 락을 부수고 최우선 갱신
             refreshMainVideo: function() {
                 if (!State.activeCCTV) return;
                 var placeholder = document.getElementById('main-loader');
@@ -1584,6 +1567,7 @@
                     }
                 } finally {
                     State.refreshingMainUrl = false;
+                    this.resumeFavNetworkForMain(); 
                 }
             },
 
@@ -1836,6 +1820,9 @@
                             document.getElementById('btn-main-refresh').style.display = 'inline-block';
                             document.getElementById('btn-fav-add').style.display = 'inline-block'; 
                             
+                            self.pauseFavNetworkForMain();
+                            
+                            // ★ 0초 딜레이로 다이렉트 샷 
                             self.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
                         }, 50); 
                     });
@@ -1909,6 +1896,8 @@
                     badge.innerText = 'LIVE';
                     badge.className = 'video-badge active';
                     video.play().catch(function(){});
+                    
+                    self.resumeFavNetworkForMain();
                 };
 
                 var renewUrl = function(delay) {
@@ -1920,6 +1909,7 @@
                     }, delay);
                 };
 
+                // ★ 기존 20초 -> 7초로 확 줄여서 안 켜지면 무조건 바로바로 새 주소 발급 
                 watchdog = setTimeout(function() {
                     if (!isCurrent()) return;
                     if (video.readyState < 3) {
@@ -1938,7 +1928,7 @@
                         }
                         renewUrl(500);
                     }
-                }, 20000);
+                }, 7000);
 
                 if (Hls.isSupported()) {
                     var hls = new Hls(BASE_HLS_CONFIG);
