@@ -375,7 +375,7 @@
             justify-content: center;
         }
 
-        /* ★ GPS 펄스 트래킹 마커 디자인 (네이티브 앱 수준) */
+        /* ★ GPS 펄스 트래킹 마커 디자인 */
         .gps-marker-ring {
             border: 3px solid var(--accent);
             border-radius: 50%;
@@ -556,7 +556,7 @@
 <body>
     <div id="header">
         <span id="current-location-text">동기화 완료 · 지역을 선택하세요</span>
-        <div class="version-tag">v8.0</div> <!-- ★ 하네스 마스터 빌드 -->
+        <div class="version-tag">v9.1</div> <!-- ★ 워커 완전 삭제 마스터 빌드 -->
         <div class="btn-group">
             <button id="btn-refresh" onclick="App.softRefresh()" title="빈 화면 시 새로고침">🔄 새로고침</button>
             <button onclick="App.goBack()">이전</button>
@@ -612,7 +612,7 @@
                 <div id="video-content">
                     <div id="video-placeholder" class="placeholder">지도 상의 인프라 마커(빨간 점) 또는<br>하단 채널을 선택하세요</div>
                     <div id="main-loader" class="placeholder" style="display:none; z-index:2; background:#000;">
-                        <!-- ★ 스켈레톤 로딩 애니메이션 적용 -->
+                        <!-- ★ 스켈레톤 로딩 애니메이션 레이어 -->
                         <div class="skeleton-loader"></div>
                         <div class="video-loader" style="margin-bottom:8px; position:relative; z-index:2;"></div>
                         <span id="main-loader-text" style="color:var(--success); font-weight:bold; position:relative; z-index:2;">채널 연결 중...</span>
@@ -745,7 +745,7 @@
             mainAbortController: null,
             isEditMode: false, syncInterval: null,
             currentFocusBounds: null, activeRegionName: null, fromSearch: false, parentSidoCode: null,
-            parentSidoName: null, parserWorker: null, hlsRetryCount: 0,
+            parentSidoName: null, hlsRetryCount: 0,
             currentCCTVs: [], nationwideCCTVs: [], renderedCCTVs: new Set(),
             cctvClickTimer: null, activeMarker: null, myLocMarker: null,
             nativeMainRetryCount: 0, 
@@ -800,7 +800,7 @@
             }
         }
 
-        // ★ 워커 스레드 꼬임 해결: 로컬 파싱 함수
+        // ★ 워커(Web Worker) 스레드 강제 폐지, 100% 안전한 로컬 파싱 엔진으로 교체
         async function parseITSDataAsync(rawContent) {
             let results = [];
             try {
@@ -887,7 +887,6 @@
                 this.startAutoSync();
             },
 
-            // ★ 소프트 새로고침: 메모리 완전 해제 및 화학적 포맷 적용 (Deep GC)
             softRefresh: async function() {
                 if(State.refreshTimer) clearTimeout(State.refreshTimer);
                 
@@ -905,7 +904,6 @@
                 document.getElementById('video-content').innerHTML = `
                     <div id="video-placeholder" class="placeholder">지도 상의 인프라 마커(빨간 점) 또는<br>하단 채널을 선택하세요</div>
                     <div id="main-loader" class="placeholder" style="display:none; z-index:2; background:#000;">
-                        <!-- ★ 스켈레톤 로딩 애니메이션 레이어 추가 -->
                         <div class="skeleton-loader"></div>
                         <div class="video-loader" style="margin-bottom:8px; position:relative; z-index:2;"></div>
                         <span id="main-loader-text" style="color:var(--success); font-weight:bold; position:relative; z-index:2;">채널 연결 중...</span>
@@ -933,7 +931,6 @@
                 this.infoLabelLayer.clearLayers();
                 this.cctvLayer.clearLayers();
                 
-                // ★ 내 위치 마커 초기화
                 if (this.myLocMarker) { this.map.removeLayer(this.myLocMarker); this.myLocMarker = null; }
 
                 UI.updateHeader('시스템 동기화 완료 · 관측 대상 시/도를 선택하세요');
@@ -1021,7 +1018,6 @@
                 }, 60000);
             },
 
-            // ★ GPS 펄스(Pulse) 마커 추가
             findMyLocation: function() {
                 if (!navigator.geolocation) return UI.showToast('위치 정보를 지원하지 않는 브라우저입니다', '#ef4444');
                 UI.showLoading('현재 위치 확인 중...');
@@ -1031,10 +1027,8 @@
                         const lat = pos.coords.latitude;
                         const lng = pos.coords.longitude;
                         
-                        // 기존 GPS 마커 지우기
                         if (this.myLocMarker) this.map.removeLayer(this.myLocMarker);
                         
-                        // 네이티브 앱 감성의 GPS 펄스 마커 생성
                         var gpsHtml = `<div class="gps-marker-ring" style="width:20px; height:20px; border-radius:50%; background:rgba(59, 130, 246, 0.4);"></div>
                                        <div style="width:10px; height:10px; border-radius:50%; background:var(--accent); border:2px solid #fff; position:absolute; top:5px; left:5px;"></div>`;
                         var icon = L.divIcon({ html: gpsHtml, className: 'leaflet-div-icon-custom', iconSize: L.point(20,20) });
@@ -1215,7 +1209,6 @@
                     if (elem.requestFullscreen) elem.requestFullscreen();
                     else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
                     else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
-                    // ★ 전체화면 시 가로모드 자동 회전 
                     if (screen.orientation && screen.orientation.lock) {
                         screen.orientation.lock('landscape').catch(()=>{});
                     }
@@ -1246,7 +1239,6 @@
                 }
             },
 
-            // ★ 가비지 컬렉션(GC) 강제화
             clearFavVideos: function() {
                 for (var key in this.favHlsInstances) {
                     if (this.favHlsInstances[key]) {
@@ -1308,7 +1300,6 @@
                 this.saveFavorites(); this.renderFavoritesUI();
             },
 
-            // ★ 즐겨찾기 무조건 동시 다발적 릴레이 로딩 렌더링 (대기 0%)
             renderFavoritesUI: function() {
                 var self = this;
                 var bar = document.getElementById('bottom-bar');
@@ -1329,13 +1320,14 @@
                     
                     card.onclick = function(e) { 
                         if (State.isEditMode) return; 
-                        var vid = document.getElementById('fav-video-' + fav.id);
-                        if(vid && (vid.paused || vid.style.opacity === '0')) {
-                            self.initFavVideo(fav.id, fav.url);
+                        var loader = document.getElementById('loader-' + fav.id);
+                        if(loader) {
+                            loader.innerHTML = '<div class="video-loader" style="width:20px; height:20px; border-width:2px; margin-bottom:6px;"></div><span style="font-size:11px; color:var(--success); font-weight:bold;">채널 연결 중...</span>';
+                            loader.style.display = 'flex';
                         }
+                        self.autoRefreshFavoriteUrl(fav.id, fav.name);
                     }; 
                     
-                    // ★ 스켈레톤 로딩 애니메이션 적용
                     card.innerHTML =
                         `<button class="fav-remove" onclick="App.removeFavorite('${fav.id}', event)">삭제</button>
                         <div class="fav-screen">
@@ -1365,7 +1357,6 @@
                 });
             },
 
-            // ★ 즐겨찾기 수동 갱신 + API 이중 재시도 방어망
             refreshFavoriteUrl: async function(id, name, event, attempt = 1) {
                 if (event) event.stopPropagation();
                 if (State.isEditMode) return;
@@ -1414,7 +1405,6 @@
                 }
             },
 
-            // ★ 마이크로 버퍼링이 적용된 즐겨찾기 엔진
             initFavVideo: function(id, url) {
                 if (!url) return;
                 var secureUrl = url.replace(/^http:\/\//i, 'https://'); 
@@ -1435,8 +1425,8 @@
                     }
                     var hls = new Hls(Object.assign({}, BASE_HLS_CONFIG, { 
                         enableWorker: false, 
-                        maxBufferLength: 4, 
-                        maxMaxBufferLength: 8
+                        maxBufferLength: 8,
+                        maxMaxBufferLength: 16
                     }));
                     
                     hls.loadSource(secureUrl);
@@ -1468,7 +1458,7 @@
                                 default:
                                     if (!self.favorites.some(f => f.id === id)) return;
                                     if (loader) {
-                                        loader.innerHTML = '🔄<br><span style="font-size:10px; color:var(--success)">주소 갱신 중...</span>';
+                                        loader.innerHTML = '🔄<br><span style="font-size:10px; color:var(--success)">주소 자동 갱신 중...</span>';
                                         loader.style.display = 'flex';
                                     }
                                     try { hls.destroy(); } catch(e){}
@@ -1489,7 +1479,7 @@
                         State.nativeFavRetryCounts[id] = (State.nativeFavRetryCounts[id] || 0) + 1;
                         if (State.nativeFavRetryCounts[id] <= 3) {
                             if (loader) {
-                                loader.innerHTML = '🔄<br><span style="font-size:10px; color:var(--success)">주소 갱신 중...</span>';
+                                loader.innerHTML = '🔄<br><span style="font-size:10px; color:var(--success)">주소 자동 갱신 중...</span>';
                                 loader.style.display = 'flex';
                             }
                             setTimeout(() => self.autoRefreshFavoriteUrl(id, favName), 2000);
@@ -1509,7 +1499,6 @@
                 }
             },
 
-            // ★ Thundering Herd 방어용 지터(Jitter) 알고리즘 적용
             autoRefreshFavoriteUrl: async function(id, name, attempt = 1) {
                 if (!this.favorites.some(f => f.id === id)) return; 
 
@@ -1550,12 +1539,11 @@
                 }
             },
 
-            // ★ 메인 뷰어 수동 갱신 락오프 (무조건 강제 돌파)
             refreshMainVideo: function() {
                 if (!State.activeCCTV) return;
                 var placeholder = document.getElementById('main-loader');
                 if(placeholder) {
-                    placeholder.innerHTML = '<div class="video-loader" style="margin-bottom:8px;"></div><span style="color:var(--success); font-weight:bold;">수동 갱신 중...</span>';
+                    placeholder.innerHTML = '<div class="video-loader"></div><span style="color:var(--success); font-weight:bold; margin-top:8px;">수동 갱신 중...</span>';
                     placeholder.style.display = 'flex';
                 }
                 var badge = document.getElementById('video-badge');
@@ -1568,7 +1556,6 @@
                 this.autoRefreshMainUrl(State.activeCCTV, State.streamSeq);
             },
 
-            // ★ 메인 뷰어 오토 리커버리 및 스텔스 재시도
             autoRefreshMainUrl: async function(cctvObj, streamToken, attempt = 1) {
                 if (streamToken !== undefined && streamToken !== State.streamSeq) return;
                 if (State.refreshingMainUrl) return;
@@ -1844,7 +1831,7 @@
                 } finally { UI.hideLoading(); }
             },
 
-            // ★ 다이렉트 렌더링 (0.0ms 딜레이) 로직 도입
+            // ★ 다이렉트 렌더링 (0.0ms 딜레이) 로직 탑재
             renderCCTVDots: function(cctvArray, autoPlay, isNationwide = false) {
                 autoPlay = autoPlay || false; var self = this;
                 var currentZoom = this.map.getZoom();
@@ -1863,6 +1850,7 @@
                         renderer: canvasRenderer
                     });
                     
+                    // 기존 setTimeout 락 삭제, 0ms 다이렉트 콜백
                     marker.on('click', function(e) {
                         L.DomEvent.stopPropagation(e); 
                         
@@ -1877,7 +1865,6 @@
                         document.getElementById('btn-main-refresh').style.display = 'inline-block';
                         document.getElementById('btn-fav-add').style.display = 'inline-block'; 
                         
-                        // ★ 제로 레이턴시 다이렉트 플레이어 호출
                         self.playCCTVStream(cctv.cctvurl, { name: cctv.cctvname, lat: cctv.coordy, lng: cctv.coordx, url: cctv.cctvurl });
                     });
                     
@@ -1889,7 +1876,6 @@
                 if (this.cctvLayer) this.cctvLayer.bringToFront();
             },
 
-            // ★ 비동기 충돌 완전 차단 스트림 (7초 워치독 탑재)
             playCCTVStream: function(streamUrl, cctvObj) {
                 var self = this;
                 var wrapper = document.getElementById('video-content');
@@ -1905,6 +1891,7 @@
                 State.hlsRetryCount = 0;
                 State.nativeMainRetryCount = 0;
 
+                document.getElementById('btn-main-refresh').style.display = 'inline-block';
                 document.getElementById('btn-pip').style.display = 'inline-block';
                 document.getElementById('btn-fullscreen').style.display = 'inline-block';
                 document.getElementById('btn-fav-add').style.display = 'inline-block';
@@ -1920,7 +1907,7 @@
 
                 wrapper.innerHTML = `
                     <div class="placeholder" id="main-loader" style="z-index:2; background:#000;">
-                        <!-- ★ 스켈레톤 로딩 애니메이션 레이어 추가 -->
+                        <!-- ★ 스켈레톤 애니메이션 레이어 추가 -->
                         <div class="skeleton-loader"></div>
                         <div class="video-loader" style="margin-bottom:8px; position:relative; z-index:2;"></div>
                         <span id="main-loader-text" style="color:var(--success); font-weight:bold; position:relative; z-index:2;">채널 연결 중...</span>
@@ -1970,8 +1957,8 @@
                         badge.innerText = 'RENEW';
                         if (placeholder) {
                             placeholder.innerHTML = `
-                                <div class="video-loader" style="margin-bottom:8px;"></div>
-                                <span style="color:var(--success); font-weight:bold;">스트림 재연결 중...</span>
+                                <div class="video-loader"></div>
+                                <span style="color:var(--success); font-weight:bold; margin-top:8px;">스트림 재연결 중...</span>
                                 <span style="font-size:10px;color:#777;margin-top:4px;">영상 서버 응답 확인 중</span>
                             `;
                             placeholder.style.display = 'flex';
@@ -1982,7 +1969,7 @@
                         }
                         renewUrl(500);
                     }
-                }, 7000);
+                }, 20000);
 
                 if (Hls.isSupported()) {
                     var hls = new Hls(BASE_HLS_CONFIG);
@@ -2017,8 +2004,8 @@
                                     badge.innerText = 'RENEW';
                                     if (placeholder) {
                                         placeholder.innerHTML = `
-                                            <div class="video-loader" style="margin-bottom:8px;"></div>
-                                            <span style="color:var(--success);font-weight:bold;">최신 CCTV 주소 확인 중...</span>
+                                            <div class="video-loader"></div>
+                                            <span style="color:var(--success);font-weight:bold;margin-top:8px;">최신 CCTV 주소 확인 중...</span>
                                         `;
                                         placeholder.style.display = 'flex';
                                     }
@@ -2034,8 +2021,8 @@
                                 badge.innerText = 'RENEW';
                                 if (placeholder) {
                                     placeholder.innerHTML = `
-                                        <div class="video-loader" style="margin-bottom:8px;"></div>
-                                        <span style="color:var(--success);font-weight:bold;">CCTV 스트림 복구 중...</span>
+                                        <div class="video-loader"></div>
+                                        <span style="color:var(--success);font-weight:bold;margin-top:8px;">CCTV 스트림 복구 중...</span>
                                     `;
                                     placeholder.style.display = 'flex';
                                 }
