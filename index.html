@@ -554,7 +554,7 @@
 <body>
     <div id="header">
         <span id="current-location-text">동기화 완료 · 지역을 선택하세요</span>
-        <div class="version-tag">v11.2</div> <!-- ★ 무적 강철 파서 빌드 -->
+        <div class="version-tag">v11.3</div> <!-- ★ 강철 파서 빌드 -->
         <div class="btn-group">
             <button id="btn-refresh" onclick="App.softRefresh()" title="빈 화면 시 새로고침">🔄 새로고침</button>
             <button onclick="App.goBack()">이전</button>
@@ -809,15 +809,14 @@
             }
         }
 
-        // ★ [V11.2 강철 파서] 어떤 악조건의 데이터가 와도 강제로 뜯어냄 (마커 증발 해결)
+        // ★ [V11.3 강철 파서] 어떤 악조건의 데이터가 와도 강제로 뜯어냄 (마커 증발 해결)
         async function parseITSDataAsync(rawContent) {
             let results = [];
-            let jsonParsed = false;
             
             // 1. JSON 변환 시도
             try {
                 const json = JSON.parse(rawContent);
-                // ITS 정상 응답
+                // ITS API가 정상적으로 { response: { data: [...] } } 형태를 줄 때
                 if (json && json.response && json.response.data) {
                     const dataArray = Array.isArray(json.response.data) ? json.response.data : [json.response.data];
                     results = dataArray.map(item => ({
@@ -826,9 +825,8 @@
                         coordx: parseFloat(item.coordx || item.coordX || 0),
                         cctvurl: item.cctvurl || item.cctvUrl || ''
                     })).filter(item => item.cctvurl);
-                    if (results.length > 0) jsonParsed = true;
                 } 
-                // ITS가 이상한 JSON을 던졌을 때 방어 (단일 배열일 경우)
+                // ITS API가 그냥 배열 [...] 만 덜렁 줄 때
                 else if (Array.isArray(json)) {
                     results = json.map(item => ({
                         cctvname: (item.cctvname || item.cctvName || '교통 CCTV').replace(/[;\s]+$/, '').trim(),
@@ -836,57 +834,38 @@
                         coordx: parseFloat(item.coordx || item.coordX || 0),
                         cctvurl: item.cctvurl || item.cctvUrl || ''
                     })).filter(item => item.cctvurl);
-                    if (results.length > 0) jsonParsed = true;
                 }
             } catch(err) {
-                jsonParsed = false;
+                // JSON 파싱 에러 무시 (아래 정규식으로 넘어감)
             }
 
-            // 2. JSON 파싱이 아예 실패했거나 결과가 빈 배열이면 XML/정규식 강제 파싱 시작!
-            if (!jsonParsed || results.length === 0) {
-                try {
-                    const parser = new DOMParser();
-                    const xmlDoc = parser.parseFromString(rawContent, "text/xml");
-                    const dataNodes = xmlDoc.getElementsByTagName("data");
-                    
-                    if (dataNodes && dataNodes.length > 0) {
-                        for (let i = 0; i < dataNodes.length; i++) {
-                            const node = dataNodes[i];
-                            const nameNode = node.getElementsByTagName("cctvname")[0] || node.getElementsByTagName("cctvName")[0];
-                            const yNode = node.getElementsByTagName("coordy")[0] || node.getElementsByTagName("coordY")[0];
-                            const xNode = node.getElementsByTagName("coordx")[0] || node.getElementsByTagName("coordX")[0];
-                            const urlNode = node.getElementsByTagName("cctvurl")[0] || node.getElementsByTagName("cctvUrl")[0];
-                            
-                            if (nameNode && yNode && xNode && urlNode) {
-                                results.push({
-                                    cctvname: nameNode.textContent.replace(/[;\s]+$/, '').trim() || '교통 CCTV',
-                                    coordy: parseFloat(yNode.textContent || 0),
-                                    coordx: parseFloat(xNode.textContent || 0),
-                                    cctvurl: urlNode.textContent || ''
-                                });
-                            }
-                        }
-                    } 
-                } catch (xmlErr) {}
+            // 2. JSON 파싱 실패 또는 결과가 비어있다면, 무조건 텍스트 긁기 (Ultimate Regex Fallback)
+            if (results.length === 0 && rawContent) {
+                // <data> 태그 블록을 통째로 찾거나, 각 항목들을 직접 찾음
+                const nameRegex = /<cctvname>(.*?)<\/cctvname>|<cctvName>(.*?)<\/cctvName>/gi;
+                const yRegex = /<coordy>(.*?)<\/coordy>|<coordY>(.*?)<\/coordY>/gi;
+                const xRegex = /<coordx>(.*?)<\/coordx>|<coordX>(.*?)<\/coordX>/gi;
+                const urlRegex = /<cctvurl>(.*?)<\/cctvurl>|<cctvUrl>(.*?)<\/cctvUrl>/gi;
+
+                let names = [], ys = [], xs = [], urls = [];
+                let match;
                 
-                // 3. 최후의 수단: DOMParser마저 실패하면 무식하게 문자열 긁기 (Regex Fallback)
-                if (results.length === 0) {
-                    const dataBlocks = rawContent.match(/<data>[\s\S]*?<\/data>/gi) || [];
-                    dataBlocks.forEach(block => {
-                        const nameMatch = block.match(/<cctvname>([\s\S]*?)<\/cctvname>/i) || block.match(/<cctvName>([\s\S]*?)<\/cctvName>/i);
-                        const yMatch = block.match(/<coordy>([\s\S]*?)<\/coordy>/i) || block.match(/<coordY>([\s\S]*?)<\/coordY>/i);
-                        const xMatch = block.match(/<coordx>([\s\S]*?)<\/coordx>/i) || block.match(/<coordX>([\s\S]*?)<\/coordX>/i);
-                        const urlMatch = block.match(/<cctvurl>([\s\S]*?)<\/cctvurl>/i) || block.match(/<cctvUrl>([\s\S]*?)<\/cctvUrl>/i);
-                        
-                        if(nameMatch && yMatch && xMatch && urlMatch) {
-                            results.push({
-                                cctvname: nameMatch[1].replace(/[;\s]+$/, '').trim() || '교통 CCTV',
-                                coordy: parseFloat(yMatch[1] || 0),
-                                coordx: parseFloat(xMatch[1] || 0),
-                                cctvurl: urlMatch[1] || ''
-                            });
-                        }
-                    });
+                while ((match = nameRegex.exec(rawContent)) !== null) names.push(match[1] || match[2]);
+                while ((match = yRegex.exec(rawContent)) !== null) ys.push(match[1] || match[2]);
+                while ((match = xRegex.exec(rawContent)) !== null) xs.push(match[1] || match[2]);
+                while ((match = urlRegex.exec(rawContent)) !== null) urls.push(match[1] || match[2]);
+
+                const minLen = Math.min(names.length, ys.length, xs.length, urls.length);
+                
+                for (let i = 0; i < minLen; i++) {
+                    if (urls[i] && urls[i].trim() !== '') {
+                        results.push({
+                            cctvname: names[i].replace(/[;\s]+$/, '').trim() || '교통 CCTV',
+                            coordy: parseFloat(ys[i] || 0),
+                            coordx: parseFloat(xs[i] || 0),
+                            cctvurl: urls[i].trim()
+                        });
+                    }
                 }
             }
             return results;
@@ -2031,7 +2010,7 @@
                         }
                         renewUrl(500);
                     }
-                }, 15000); 
+                }, 20000);
 
                 if (Hls.isSupported()) {
                     var hls = new Hls(BASE_HLS_CONFIG);
