@@ -554,7 +554,7 @@
 <body>
     <div id="header">
         <span id="current-location-text">동기화 완료 · 지역을 선택하세요</span>
-        <div class="version-tag">v11.1</div> <!-- ★ 무결점 파서 픽스 -->
+        <div class="version-tag">v11.2</div> <!-- ★ 무적 강철 파서 빌드 -->
         <div class="btn-group">
             <button id="btn-refresh" onclick="App.softRefresh()" title="빈 화면 시 새로고침">🔄 새로고침</button>
             <button onclick="App.goBack()">이전</button>
@@ -809,7 +809,7 @@
             }
         }
 
-        // ★ [V11.1 강성 파서] 서버가 JSON인지 XML인지, 에러를 내뿜는지 상관없이 무조건 잡아냄
+        // ★ [V11.2 강철 파서] 어떤 악조건의 데이터가 와도 강제로 뜯어냄 (마커 증발 해결)
         async function parseITSDataAsync(rawContent) {
             let results = [];
             let jsonParsed = false;
@@ -826,9 +826,9 @@
                         coordx: parseFloat(item.coordx || item.coordX || 0),
                         cctvurl: item.cctvurl || item.cctvUrl || ''
                     })).filter(item => item.cctvurl);
-                    jsonParsed = true;
+                    if (results.length > 0) jsonParsed = true;
                 } 
-                // ITS가 이상한 JSON을 던졌을 때 방어
+                // ITS가 이상한 JSON을 던졌을 때 방어 (단일 배열일 경우)
                 else if (Array.isArray(json)) {
                     results = json.map(item => ({
                         cctvname: (item.cctvname || item.cctvName || '교통 CCTV').replace(/[;\s]+$/, '').trim(),
@@ -836,20 +836,20 @@
                         coordx: parseFloat(item.coordx || item.coordX || 0),
                         cctvurl: item.cctvurl || item.cctvUrl || ''
                     })).filter(item => item.cctvurl);
-                    jsonParsed = true;
+                    if (results.length > 0) jsonParsed = true;
                 }
             } catch(err) {
                 jsonParsed = false;
             }
 
-            // 2. JSON이 아니거나 실패했다면, 무식하게 XML 텍스트를 파내기 (정규식/DOM 파서 혼합 방어)
+            // 2. JSON 파싱이 아예 실패했거나 결과가 빈 배열이면 XML/정규식 강제 파싱 시작!
             if (!jsonParsed || results.length === 0) {
                 try {
                     const parser = new DOMParser();
                     const xmlDoc = parser.parseFromString(rawContent, "text/xml");
                     const dataNodes = xmlDoc.getElementsByTagName("data");
                     
-                    if (dataNodes.length > 0) {
+                    if (dataNodes && dataNodes.length > 0) {
                         for (let i = 0; i < dataNodes.length; i++) {
                             const node = dataNodes[i];
                             const nameNode = node.getElementsByTagName("cctvname")[0] || node.getElementsByTagName("cctvName")[0];
@@ -866,27 +866,27 @@
                                 });
                             }
                         }
-                    } else {
-                        // 최후의 수단: 완전 깨진 XML이나 이상한 태그일 경우 정규식으로 박박 긁어모음
-                        const dataBlocks = rawContent.match(/<data>[\s\S]*?<\/data>/gi) || [];
-                        dataBlocks.forEach(block => {
-                            const nameMatch = block.match(/<cctvname>([\s\S]*?)<\/cctvname>/i) || block.match(/<cctvName>([\s\S]*?)<\/cctvName>/i);
-                            const yMatch = block.match(/<coordy>([\s\S]*?)<\/coordy>/i) || block.match(/<coordY>([\s\S]*?)<\/coordY>/i);
-                            const xMatch = block.match(/<coordx>([\s\S]*?)<\/coordx>/i) || block.match(/<coordX>([\s\S]*?)<\/coordX>/i);
-                            const urlMatch = block.match(/<cctvurl>([\s\S]*?)<\/cctvurl>/i) || block.match(/<cctvUrl>([\s\S]*?)<\/cctvUrl>/i);
-                            
-                            if(nameMatch && yMatch && xMatch && urlMatch) {
-                                results.push({
-                                    cctvname: nameMatch[1].replace(/[;\s]+$/, '').trim() || '교통 CCTV',
-                                    coordy: parseFloat(yMatch[1] || 0),
-                                    coordx: parseFloat(xMatch[1] || 0),
-                                    cctvurl: urlMatch[1] || ''
-                                });
-                            }
-                        });
-                    }
-                } catch (xmlErr) {
-                    // 모든 시도가 실패하면 빈 배열 리턴
+                    } 
+                } catch (xmlErr) {}
+                
+                // 3. 최후의 수단: DOMParser마저 실패하면 무식하게 문자열 긁기 (Regex Fallback)
+                if (results.length === 0) {
+                    const dataBlocks = rawContent.match(/<data>[\s\S]*?<\/data>/gi) || [];
+                    dataBlocks.forEach(block => {
+                        const nameMatch = block.match(/<cctvname>([\s\S]*?)<\/cctvname>/i) || block.match(/<cctvName>([\s\S]*?)<\/cctvName>/i);
+                        const yMatch = block.match(/<coordy>([\s\S]*?)<\/coordy>/i) || block.match(/<coordY>([\s\S]*?)<\/coordY>/i);
+                        const xMatch = block.match(/<coordx>([\s\S]*?)<\/coordx>/i) || block.match(/<coordX>([\s\S]*?)<\/coordX>/i);
+                        const urlMatch = block.match(/<cctvurl>([\s\S]*?)<\/cctvurl>/i) || block.match(/<cctvUrl>([\s\S]*?)<\/cctvUrl>/i);
+                        
+                        if(nameMatch && yMatch && xMatch && urlMatch) {
+                            results.push({
+                                cctvname: nameMatch[1].replace(/[;\s]+$/, '').trim() || '교통 CCTV',
+                                coordy: parseFloat(yMatch[1] || 0),
+                                coordx: parseFloat(xMatch[1] || 0),
+                                cctvurl: urlMatch[1] || ''
+                            });
+                        }
+                    });
                 }
             }
             return results;
@@ -1489,8 +1489,8 @@
                     }
                     var hls = new Hls(Object.assign({}, BASE_HLS_CONFIG, { 
                         enableWorker: false, 
-                        maxBufferLength: 4, 
-                        maxMaxBufferLength: 8
+                        maxBufferLength: 8,
+                        maxMaxBufferLength: 16
                     }));
                     
                     hls.loadSource(secureUrl);
@@ -1608,7 +1608,7 @@
                 if (!State.activeCCTV) return;
                 var placeholder = document.getElementById('main-loader');
                 if(placeholder) {
-                    placeholder.innerHTML = '<div class="video-loader" style="margin-bottom:8px;"></div><span style="color:var(--success); font-weight:bold;">수동 갱신 중...</span>';
+                    placeholder.innerHTML = '<div class="video-loader"></div><span style="color:var(--success); font-weight:bold; margin-top:8px;">수동 갱신 중...</span>';
                     placeholder.style.display = 'flex';
                 }
                 var badge = document.getElementById('video-badge');
@@ -1896,7 +1896,6 @@
                 } finally { UI.hideLoading(); }
             },
 
-            // ★ 다이렉트 렌더링 (0.0ms 딜레이) 로직 탑재
             renderCCTVDots: function(cctvArray, autoPlay, isNationwide = false) {
                 autoPlay = autoPlay || false; var self = this;
                 var currentZoom = this.map.getZoom();
@@ -1971,7 +1970,6 @@
 
                 wrapper.innerHTML = `
                     <div class="placeholder" id="main-loader" style="z-index:2; background:#000;">
-                        <!-- ★ 스켈레톤 애니메이션 레이어 추가 -->
                         <div class="skeleton-loader"></div>
                         <div class="video-loader" style="margin-bottom:8px; position:relative; z-index:2;"></div>
                         <span id="main-loader-text" style="color:var(--success); font-weight:bold; position:relative; z-index:2;">채널 연결 중...</span>
