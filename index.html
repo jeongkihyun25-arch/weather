@@ -554,7 +554,7 @@
 <body>
     <div id="header">
         <span id="current-location-text">동기화 완료 · 지역을 선택하세요</span>
-        <div class="version-tag">v11.3</div> <!-- ★ 강철 파서 빌드 -->
+        <div class="version-tag">v11.4</div> <!-- ★ 무적의 강철 파서 빌드 -->
         <div class="btn-group">
             <button id="btn-refresh" onclick="App.softRefresh()" title="빈 화면 시 새로고침">🔄 새로고침</button>
             <button onclick="App.goBack()">이전</button>
@@ -809,14 +809,13 @@
             }
         }
 
-        // ★ [V11.3 강철 파서] 어떤 악조건의 데이터가 와도 강제로 뜯어냄 (마커 증발 해결)
+        // ★ [V11.4 무적 파서] 대소문자, XML/JSON 혼종, 깨진 데이터 등 모든 예외 상황 강제 돌파
         async function parseITSDataAsync(rawContent) {
             let results = [];
             
-            // 1. JSON 변환 시도
+            // 1. JSON 변환 시도 (가장 빠른 길)
             try {
                 const json = JSON.parse(rawContent);
-                // ITS API가 정상적으로 { response: { data: [...] } } 형태를 줄 때
                 if (json && json.response && json.response.data) {
                     const dataArray = Array.isArray(json.response.data) ? json.response.data : [json.response.data];
                     results = dataArray.map(item => ({
@@ -826,7 +825,6 @@
                         cctvurl: item.cctvurl || item.cctvUrl || ''
                     })).filter(item => item.cctvurl);
                 } 
-                // ITS API가 그냥 배열 [...] 만 덜렁 줄 때
                 else if (Array.isArray(json)) {
                     results = json.map(item => ({
                         cctvname: (item.cctvname || item.cctvName || '교통 CCTV').replace(/[;\s]+$/, '').trim(),
@@ -836,25 +834,26 @@
                     })).filter(item => item.cctvurl);
                 }
             } catch(err) {
-                // JSON 파싱 에러 무시 (아래 정규식으로 넘어감)
+                // JSON 실패 시 쿨하게 무시
             }
 
-            // 2. JSON 파싱 실패 또는 결과가 비어있다면, 무조건 텍스트 긁기 (Ultimate Regex Fallback)
+            // 2. JSON 파싱 실패 또는 빈 결과일 경우 무조건 정규식으로 텍스트 강제 적출 (가장 확실한 길)
+            // ★ i 플래그를 통해 대소문자(cctvName vs cctvname)를 완전히 무시하고 잡아냄
             if (results.length === 0 && rawContent) {
-                // <data> 태그 블록을 통째로 찾거나, 각 항목들을 직접 찾음
-                const nameRegex = /<cctvname>(.*?)<\/cctvname>|<cctvName>(.*?)<\/cctvName>/gi;
-                const yRegex = /<coordy>(.*?)<\/coordy>|<coordY>(.*?)<\/coordY>/gi;
-                const xRegex = /<coordx>(.*?)<\/coordx>|<coordX>(.*?)<\/coordX>/gi;
-                const urlRegex = /<cctvurl>(.*?)<\/cctvurl>|<cctvUrl>(.*?)<\/cctvUrl>/gi;
+                const nameRegex = /<cctvname>(.*?)<\/cctvname>/gi;
+                const yRegex = /<coordy>(.*?)<\/coordy>/gi;
+                const xRegex = /<coordx>(.*?)<\/coordx>/gi;
+                const urlRegex = /<cctvurl>(.*?)<\/cctvurl>/gi;
 
                 let names = [], ys = [], xs = [], urls = [];
                 let match;
                 
-                while ((match = nameRegex.exec(rawContent)) !== null) names.push(match[1] || match[2]);
-                while ((match = yRegex.exec(rawContent)) !== null) ys.push(match[1] || match[2]);
-                while ((match = xRegex.exec(rawContent)) !== null) xs.push(match[1] || match[2]);
-                while ((match = urlRegex.exec(rawContent)) !== null) urls.push(match[1] || match[2]);
+                while ((match = nameRegex.exec(rawContent)) !== null) names.push(match[1]);
+                while ((match = yRegex.exec(rawContent)) !== null) ys.push(match[1]);
+                while ((match = xRegex.exec(rawContent)) !== null) xs.push(match[1]);
+                while ((match = urlRegex.exec(rawContent)) !== null) urls.push(match[1]);
 
+                // 4개의 배열 중 가장 짧은 길이를 기준으로 병합 (데이터 짝 안맞음 방어)
                 const minLen = Math.min(names.length, ys.length, xs.length, urls.length);
                 
                 for (let i = 0; i < minLen; i++) {
@@ -2010,7 +2009,7 @@
                         }
                         renewUrl(500);
                     }
-                }, 20000);
+                }, 15000); 
 
                 if (Hls.isSupported()) {
                     var hls = new Hls(BASE_HLS_CONFIG);
